@@ -118,7 +118,7 @@ describe("ChatSession", () => {
     const session = new ChatSession(config, "fresh-user", "ai-engineer");
     await session.bootstrap();
     const reply = await session.handleInput("/trending");
-    expect(reply.content).toContain("gh auth login");
+    expect(reply.content).toContain("/auth login");
   });
 
   it("prompts for profile before /follow", async () => {
@@ -126,7 +126,7 @@ describe("ChatSession", () => {
     const session = new ChatSession(config, "fresh-user", "ai-engineer");
     await session.bootstrap();
     const reply = await session.handleInput("/follow");
-    expect(reply.content).toContain("gh auth login");
+    expect(reply.content).toContain("/auth login");
   });
 
   it("lists cached profiles to follow from dossier", async () => {

@@ -49,10 +49,17 @@ function formatGrowthPlan(result: AnalysisResult): string {
     .slice(0, 5)
     .map((r) => `- ${r.fullName} (${r.stars}★): ${r.relevanceReason}`)
     .join("\n");
+  const roleModels = plan.github.profiles
+    .slice(0, 8)
+    .map((p) => `- @${p.username}: ${p.relevanceReason}`)
+    .join("\n");
   return [
     recs,
     tech ? `Technologies to explore: ${tech}` : "",
     trending ? `Trending repos:\n${trending}` : "",
+    roleModels
+      ? `Profiles to follow (use /follow apply or "follow them" after /follow):\n${roleModels}`
+      : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -215,7 +222,7 @@ export function buildWelcomeMessage(username: string, roleId: string): string {
     "",
     "_Note: your username in the header is not the same as a loaded coaching profile._",
     "",
-    "Connect GitHub with `gh auth login`, then restart — your profile loads automatically.",
+    "Connect GitHub with **`/auth login`** — your profile loads automatically after sign-in.",
     "Or run **`/analyze profile`** to refresh your attractiveness audit (bio, README, pins, stats, activity).",
     "",
     "Commands: `/gaps`, `/growth`, `/trending`, `/follow`, `/improve`, `/help`.",
@@ -252,11 +259,11 @@ export const WELCOME_MESSAGE = [
   "Your GitHub profile loads automatically when `gh` is connected.",
   "Refresh with /analyze profile · deep-scan a repo with /analyze <repo>.",
   "",
-  "Commands: /analyze profile · /analyze <repo> · /role · /model · /rules · /skills · /mcp · /gaps · /growth · /trending · /follow · /improve · /export · /help · /quit",
+  "Commands: /analyze profile · /auth · /role · /model · /rules · /skills · /mcp · /gaps · /growth · /trending · /follow · /improve · /export · /help · /quit",
 ].join("\n");
 
 export const NEED_ANALYSIS_MESSAGE =
-  "No GitHub profile loaded. Connect with `gh auth login` or run **`/analyze profile`** (or `/analyze profile @user`).";
+  "No GitHub profile loaded. Connect with **`/auth login`** or run **`/analyze profile`** (or `/analyze profile @user`).";
 
 export function formatToolResult(label: string, body: string): string {
   return `**${label}**\n\n${body}`;

@@ -5,10 +5,11 @@ import { loadConfig, markModelConfigured, needsModelOnboarding } from "@git-ment
 import { ChatFooter } from "./ChatFooter.js";
 import { ChatMessageView, type ChatMessageRole } from "./ChatMessageView.js";
 import { Header } from "./Header.js";
+import { GitHubAuthView } from "./GitHubAuthView.js";
 import { ModelSelectView, SignInView, type ModelPickerResult } from "./ModelSelectView.js";
 import { RichText } from "./RichText.js";
 
-type View = "chat" | "model-select" | "signin" | "model-onboarding";
+type View = "chat" | "model-select" | "signin" | "github-auth" | "model-onboarding";
 
 interface ChatMessage {
   id: string;
@@ -29,8 +30,17 @@ function isModelSignInCommand(line: string): boolean {
   return parts[0]?.toLowerCase() === "model" && parts[1]?.toLowerCase() === "signin";
 }
 
+function parseGitHubAuthCommand(line: string): "login" | "refresh" | null {
+  const parts = line.trim().slice(1).split(/\s+/);
+  if (parts[0]?.toLowerCase() !== "auth") return null;
+  const sub = parts[1]?.toLowerCase();
+  if (sub === "login" || sub === "refresh") return sub;
+  return null;
+}
+
 function needsProgress(line: string): boolean {
   if (line.startsWith("/trending") || line.startsWith("/follow")) return true;
+  if (/^follow\b/i.test(line.trim()) && !line.startsWith("/")) return true;
   if (!line.startsWith("/analyze")) return false;
   const parts = line.slice(1).trim().split(/\s+/);
   if (parts[0]?.toLowerCase() !== "analyze") return false;
@@ -70,6 +80,7 @@ export function ChatApp(props: {
     model: config.llm.model,
   });
   const [contextStats, setContextStats] = useState<ContextSnapshot>(() => session.getContextSnapshot());
+  const [githubAuthAction, setGithubAuthAction] = useState<"login" | "refresh" | null>(null);
 
   const refreshContextStats = useCallback(() => {
     setContextStats(session.getContextSnapshot());
@@ -158,6 +169,14 @@ export function ChatApp(props: {
         return;
       }
 
+      const ghAuth = parseGitHubAuthCommand(trimmed);
+      if (ghAuth) {
+        appendMessage(trimmed, "user");
+        setGithubAuthAction(ghAuth);
+        setView("github-auth");
+        return;
+      }
+
       appendMessage(trimmed, "user");
 
       setBusy(true);
@@ -223,6 +242,27 @@ export function ChatApp(props: {
 
   if (view === "signin") {
     return <SignInView onDone={handlePickerDone} />;
+  }
+
+  if (view === "github-auth" && githubAuthAction) {
+    return (
+      <GitHubAuthView
+        action={githubAuthAction}
+        onDone={(result) => {
+          setView("chat");
+          setGithubAuthAction(null);
+          void (async () => {
+            if (result.ok) {
+              const reply = await session.finalizeGitHubAuth(githubAuthAction);
+              appendMessage(reply.content.replace(/\*\*/g, ""), "assistant");
+            } else {
+              appendMessage(result.message, "assistant");
+            }
+            refreshContextStats();
+          })();
+        }}
+      />
+    );
   }
 
   const llm = session.getConfig().llm;

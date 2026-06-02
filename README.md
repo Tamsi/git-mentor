@@ -89,7 +89,9 @@ gitmentor app
 
 ```bash
 gitmentor init --provider ollama --model qwen3:8b
-gitmentor auth
+gitmentor auth              # GitHub token status
+gitmentor auth login        # browser sign-in (gh)
+gitmentor auth refresh      # add user scope for follow
 gitmentor doctor
 ```
 
@@ -140,24 +142,30 @@ gitmentor init   # installs default GitHub-focused rules + skills
 
 **Default skills:** `gap-coaching`, `github-profile-optimization`, `repo-deep-scan`, `growth-and-trending`, `interview-prep` (active by default: `gap-coaching`, `github-profile-optimization`)
 
-**Chat commands:** `/rules`, `/skills`, `/skills use repo-deep-scan`, `/mcp`
+**Chat commands:** `/rules`, `/skills`, `/skills use repo-deep-scan`, `/mcp`, `/auth`, `/auth login`, `/auth refresh`
 
 **Config** (`~/.config/git-mentor/config.yaml`):
 
-With **`gh auth login`**, gitmentor **auto-enables the [GitHub MCP server](https://github.com/github/github-mcp-server)** for write actions (fork, issues, PRs). Career coaching stays in git-mentor MCP; GitHub operations delegate to GitHub MCP.
+With **`gh auth login`**, gitmentor **auto-enables a GitHub MCP server** (bundled in `@git-mentor/github`) for write actions: `fork_repository`, `follow_user`, etc. Career coaching stays in git-mentor MCP; GitHub operations go through GitHub MCP.
 
 ```yaml
 mcp:
   servers:
     - name: github
-      command: npx
-      args: ["-y", "@modelcontextprotocol/server-github"]
+      command: node
+      args: ["…/node_modules/@git-mentor/github/dist/mcp-github-server.js"]
       enabled: true   # auto-enabled when gh auth is detected
 ```
 
-Chat shortcuts: `/fork anomalyco/opencode` or `fork opencode` (after `/trending`) → calls MCP `fork_repository`.
+Chat shortcuts:
+- `/fork owner/repo` or `fork reponame` (after `/trending`) → MCP `fork_repository`
+- `/follow` then `/follow apply` or `follow those profiles` → MCP `follow_user`
 
-See `packages/cli/templates/agent/mcp/servers.example.json` for a starter external MCP config.
+If follow fails with scope errors: `/auth refresh` in chat or `gitmentor auth refresh`
+
+**MCP tools reference:** `~/.config/git-mentor/mcp/tools.md` (installed by `gitmentor init`) — built-in vs `github` server, scopes, chat shortcuts.
+
+See `packages/cli/templates/agent/mcp/servers.example.json` for a starter MCP config.
 
 ## Monorepo
 

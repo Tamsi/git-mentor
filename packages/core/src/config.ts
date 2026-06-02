@@ -66,9 +66,11 @@ export type LLMConfig = z.infer<typeof LLMConfigSchema>;
 
 export const RULES_DIR = path.join(CONFIG_DIR, "rules");
 export const SKILLS_DIR = path.join(CONFIG_DIR, "skills");
+export const MCP_DIR = path.join(CONFIG_DIR, "mcp");
+export const MCP_TOOLS_FILE = path.join(MCP_DIR, "tools.md");
 
 export function ensureDirs(): void {
-  for (const dir of [CONFIG_DIR, DATA_DIR, CACHE_DIR, REPORTS_DIR, RULES_DIR, SKILLS_DIR]) {
+  for (const dir of [CONFIG_DIR, DATA_DIR, CACHE_DIR, REPORTS_DIR, RULES_DIR, SKILLS_DIR, MCP_DIR]) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }

@@ -2,8 +2,8 @@
   "servers": [
     {
       "name": "github",
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "command": "node",
+      "args": ["path/to/@git-mentor/github/dist/mcp-github-server.js"],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
       },

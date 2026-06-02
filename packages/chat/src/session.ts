@@ -41,6 +41,8 @@ import {
   formatGitHubMcpActionsHint,
   resolveForkTarget,
 } from "./github-mcp.js";
+import { completeGitHubAuthFlow } from "./github-auth.js";
+import { isFollowActionIntent, runFollowProfilesOnGitHub } from "./github-follow.js";
 import { dispatchCommand, type CommandContext } from "./commands.js";
 import { routeInput } from "./input-router.js";
 import { formatCommandError, formatGitHubError, isProfileAnalyzeTarget } from "./command-utils.js";
@@ -140,6 +142,10 @@ export class ChatSession {
     }
   }
 
+  async finalizeGitHubAuth(action: "login" | "refresh"): Promise<ChatReply> {
+    return completeGitHubAuthFlow(this.commandContext(), action);
+  }
+
   trendingReposForFork(): TrendingRepo[] {
     return this.profileAnalysis?.actionPlan?.github.repos ?? [];
   }
@@ -185,6 +191,17 @@ export class ChatSession {
     if (forkMatch?.[1]) {
       return this.runForkCommand(forkMatch[1], onProgress);
     }
+
+    if (isFollowActionIntent(input)) {
+      const cached = this.profileAnalysis?.actionPlan?.github.profiles ?? [];
+      return runFollowProfilesOnGitHub({
+        config: this.config,
+        input,
+        cachedProfiles: cached,
+        onProgress,
+      });
+    }
+
     return null;
   }
 

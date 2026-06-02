@@ -1,5 +1,13 @@
 import type { GitMentorConfig, TrendingRepo } from "@git-mentor/core";
-import { GITHUB_MCP_SERVER_NAME, isGitHubMcpEnabled } from "@git-mentor/github";
+import { loadMcpToolsDoc } from "@git-mentor/core";
+import {
+  GITHUB_MCP_SERVER_NAME,
+  GITHUB_MCP_SHIPPED_TOOLS,
+  formatFollowResultsMarkdown,
+  isGitHubMcpEnabled,
+  parseFollowUserMcpResult,
+  type FollowUserResult,
+} from "@git-mentor/github";
 import { callExternalMcpTool } from "./mcp-client.js";
 
 export function resolveForkTarget(
@@ -36,21 +44,69 @@ export async function forkRepositoryViaGitHubMcp(
 ): Promise<string> {
   if (!isGitHubMcpEnabled(config)) {
     throw new Error(
-      "GitHub MCP is not enabled. Run `gh auth login` and restart gitmentor, or enable the github server in config.yaml.",
+      "GitHub MCP is not enabled. Run **`/auth login`** or enable the github server in config.yaml.",
     );
   }
 
   return callExternalMcpTool(config, GITHUB_MCP_SERVER_NAME, "fork_repository", { owner, repo });
 }
 
+export async function followUserViaGitHubMcp(
+  config: GitMentorConfig,
+  username: string,
+): Promise<FollowUserResult> {
+  if (!isGitHubMcpEnabled(config)) {
+    throw new Error(
+      "GitHub MCP is not enabled. Run **`/auth login`** or enable the github server in config.yaml.",
+    );
+  }
+
+  const raw = await callExternalMcpTool(config, GITHUB_MCP_SERVER_NAME, "follow_user", {
+    username: username.replace(/^@/, ""),
+  });
+  return parseFollowUserMcpResult(raw, username.replace(/^@/, ""));
+}
+
+export async function followProfilesViaGitHubMcp(
+  config: GitMentorConfig,
+  usernames: string[],
+  onProgress?: (message: string) => void,
+): Promise<FollowUserResult[]> {
+  const results: FollowUserResult[] = [];
+  const unique = [...new Set(usernames.map((u) => u.replace(/^@/, "")))];
+
+  for (const username of unique) {
+    onProgress?.(`Following @${username} via GitHub MCP…`);
+    try {
+      results.push(await followUserViaGitHubMcp(config, username));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      results.push({ username, status: "failed", message });
+    }
+  }
+
+  return results;
+}
+
+export { formatFollowResultsMarkdown } from "@git-mentor/github";
+
 export function formatGitHubMcpActionsHint(config: GitMentorConfig): string {
   if (!isGitHubMcpEnabled(config)) return "";
 
+  const toolsDoc = loadMcpToolsDoc();
+  const toolsSection = toolsDoc
+    ? ["", "=== MCP TOOLS REFERENCE ===", toolsDoc, "=== END MCP TOOLS REFERENCE ==="]
+    : [];
+
+  const shipped = GITHUB_MCP_SHIPPED_TOOLS.map((t) => `\`${t}\``).join(", ");
+
   return [
     "=== GITHUB MCP (write actions) ===",
-    "For fork, issues, PRs, and repo search, use the GitHub MCP server — not manual GitHub UI steps.",
-    "Chat: `/fork owner/repo` or `/fork reponame` (after `/trending`).",
-    "Low-level: `/mcp call github fork_repository {\"owner\":\"...\",\"repo\":\"...\"}`",
+    `Shipped tools on server \`github\`: ${shipped}.`,
+    "Use this server for fork/follow — not manual GitHub UI steps or direct API from chat.",
+    "Shortcuts: `/fork owner/repo` · `/follow` then `/follow apply` or `follow them`.",
+    "Scopes: **`/auth refresh`** if follow_user returns 404.",
+    ...toolsSection,
     "=== END GITHUB MCP ===",
   ].join("\n");
 }

@@ -25,6 +25,8 @@ import {
 } from "./mcp-client.js";
 import { formatToolResult, NEED_ANALYSIS_MESSAGE } from "./prompts.js";
 import { formatCommandError, isProfileAnalyzeTarget } from "./command-utils.js";
+import { runFollowProfilesOnGitHub } from "./github-follow.js";
+import { handleGitHubAuthCommand } from "./github-auth.js";
 import type { ChatReply, ProgressCallback } from "./types.js";
 
 export const ANALYZE_USAGE = [
@@ -164,11 +166,21 @@ const handlers: Record<string, CommandHandler> = {
 
     const sub = args[0]?.toLowerCase();
     const cached = profileAnalysis.actionPlan?.github.profiles ?? [];
+
+    if (sub === "apply" || sub === "all") {
+      return runFollowProfilesOnGitHub({
+        config: ctx.config,
+        input: "follow apply",
+        cachedProfiles: cached,
+        onProgress,
+      });
+    }
+
     if (sub !== "refresh" && cached.length > 0) {
       return {
         content: formatToolResult(
           `Profiles to follow (${ctx.getRoleId()})`,
-          `${formatProfilesToFollowMarkdown(cached)}\n\nRun \`/follow refresh\` to update after \`/trending\`.`,
+          `${formatProfilesToFollowMarkdown(cached)}\n\nFollow on GitHub: \`/follow apply\` or say \`follow them\` / \`follow those profiles\`.`,
         ),
         toolUsed: "follow",
       };
@@ -189,7 +201,7 @@ const handlers: Record<string, CommandHandler> = {
     return {
       content: formatToolResult(
         `Profiles to follow (${ctx.getRoleId()})`,
-        `${formatProfilesToFollowMarkdown(profiles)}\n\nStudy their pinned repos, README style, and contribution patterns for your target role.`,
+        `${formatProfilesToFollowMarkdown(profiles)}\n\nStudy their pinned repos, README style, and contribution patterns.\nFollow on GitHub: \`/follow apply\` or \`follow them\`.`,
       ),
       toolUsed: "follow",
     };
@@ -355,11 +367,14 @@ const handlers: Record<string, CommandHandler> = {
         "- `/mcp tools <server>` — list tools from an external server",
         "- `/mcp call <server> <tool> [json]` — invoke an external tool",
         "",
+        "MCP tool reference: `~/.config/git-mentor/mcp/tools.md` (after `gitmentor init`).",
         "Run `gitmentor mcp` to expose git-mentor tools to Cursor.",
       ].join("\n"),
       toolUsed: "mcp",
     };
   },
+
+  auth: async (ctx, args) => handleGitHubAuthCommand(ctx, args),
 
   help: async () => ({
     content: [
@@ -372,13 +387,14 @@ const handlers: Record<string, CommandHandler> = {
       "- /gaps — career gap analysis (requires /analyze profile)",
       "- /growth — recommendations",
       "- /trending — discover trending repos",
-      "- /follow — list GitHub profiles to follow for your target role",
+      "- /follow — list role models · /follow apply — follow them on GitHub",
       "- /fork <repo> — fork via GitHub MCP (after /trending or owner/repo)",
       "- /improve — GitHub profile improvement plan",
       "- /export — save Markdown dossier",
       "- /rules — list coaching rules · /rules reload · /rules on|off",
       "- /skills — list skills · /skills use <id> · /skills off <id>",
       "- /mcp — MCP servers and external tool bridge",
+      "- /auth — GitHub status · /auth login · /auth refresh (gh OAuth)",
       "- /help · /quit",
       "",
       "Free-form chat works once your profile is loaded (automatic with `gh auth`).",

@@ -7,3 +7,4 @@ export * from "./export.js";
 export * from "./agent-context.js";
 export * from "./profile-attractiveness.js";
 export * from "./profile-dossier.js";
+export * from "./mcp-tools-doc.js";

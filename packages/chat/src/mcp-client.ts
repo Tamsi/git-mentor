@@ -1,5 +1,5 @@
 import type { GitMentorConfig } from "@git-mentor/core";
-import { resolveGitHubTokenForMcp } from "@git-mentor/github";
+import { GITHUB_MCP_SHIPPED_TOOLS, resolveGitHubTokenForMcp } from "@git-mentor/github";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
@@ -113,8 +113,10 @@ export function formatMcpServersList(config: GitMentorConfig): string {
   for (const server of enabled) {
     lines.push(`- **${server.name}** — \`${server.command} ${server.args.join(" ")}\``);
     if (server.name === "github") {
-      lines.push("  GitHub actions: `fork_repository`, `create_issue`, `create_pull_request`, `search_repositories`, …");
-      lines.push("  Chat shortcut: `/fork owner/repo`");
+      lines.push(
+        `  Shipped tools: ${GITHUB_MCP_SHIPPED_TOOLS.map((t) => `\`${t}\``).join(", ")} — see \`~/.config/git-mentor/mcp/tools.md\``,
+      );
+      lines.push("  Chat: `/fork owner/repo` · `/follow apply` or `follow them`");
     }
   }
   lines.push("", "Use `/mcp tools <server>` or `/mcp call <server> <tool> [json]`.");

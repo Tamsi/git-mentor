@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { RULES_DIR, SKILLS_DIR, ensureDirs } from "@git-mentor/core";
+import { RULES_DIR, SKILLS_DIR, MCP_TOOLS_FILE, ensureDirs } from "@git-mentor/core";
 
 const TEMPLATES_DIR = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -24,7 +24,7 @@ function copySkillIfMissing(skillId: string, srcDir: string, destDir: string): b
   return copyIfMissing(srcFile, destFile);
 }
 
-export function bootstrapAgentAssets(): { rulesCopied: number; skillsCopied: number } {
+export function bootstrapAgentAssets(): { rulesCopied: number; skillsCopied: number; mcpDocsCopied: number } {
   ensureDirs();
 
   let rulesCopied = 0;
@@ -48,7 +48,13 @@ export function bootstrapAgentAssets(): { rulesCopied: number; skillsCopied: num
     }
   }
 
-  return { rulesCopied, skillsCopied };
+  let mcpDocsCopied = 0;
+  const mcpToolsTemplate = path.join(TEMPLATES_DIR, "mcp", "tools.md");
+  if (copyIfMissing(mcpToolsTemplate, MCP_TOOLS_FILE)) {
+    mcpDocsCopied += 1;
+  }
+
+  return { rulesCopied, skillsCopied, mcpDocsCopied };
 }
 
 export function getAgentTemplateDir(): string {

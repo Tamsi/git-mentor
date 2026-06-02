@@ -123,33 +123,71 @@ program
     saveConfig(config);
     const agent = bootstrapAgentAssets();
     console.log(chalk.green(`Config written to ${CONFIG_FILE}`));
-    if (agent.rulesCopied > 0 || agent.skillsCopied > 0) {
+    if (agent.rulesCopied > 0 || agent.skillsCopied > 0 || agent.mcpDocsCopied > 0) {
       console.log(
         chalk.green(
-          `Agent assets installed: ${agent.rulesCopied} rule(s), ${agent.skillsCopied} skill folder(s).`,
+          `Agent assets installed: ${agent.rulesCopied} rule(s), ${agent.skillsCopied} skill folder(s), ${agent.mcpDocsCopied} MCP doc(s).`,
         ),
       );
     }
   });
 
-program.command("auth").action(() => {
-  try {
-    const status = execSync("gh auth status", { encoding: "utf8" });
-    console.log(chalk.green(status.trim()));
-    return;
-  } catch {
-    // fall through
-  }
-  const config = loadConfig();
-  if (config.github.token) {
-    console.log(chalk.green("GitHub token found in config/env."));
-  } else {
-    console.log(chalk.yellow("No GitHub auth detected."));
-    console.log("  1. Run gh auth login");
-    console.log("  2. Export GIT_MENTOR_GITHUB_TOKEN");
-    console.log("  3. gitmentor analyze @username");
-  }
-});
+program
+  .command("auth [action]")
+  .description("GitHub auth via gh CLI: status (default), login, refresh")
+  .action(async (action?: string) => {
+    const {
+      formatGitHubAuthStatusMarkdown,
+      formatPostAuthMessage,
+      getGitHubAuthReport,
+      isGhCliInstalled,
+      runGhAuthInteractive,
+      syncGitHubMcpInConfig,
+    } = await import("@git-mentor/github");
+
+    const sub = (action ?? "status").toLowerCase();
+    const config = loadConfig();
+
+    if (sub === "help") {
+      console.log("Usage: gitmentor auth [status|login|refresh]");
+      console.log("  status  — show account and OAuth scopes (default)");
+      console.log("  login   — browser sign-in (gh auth login)");
+      console.log("  refresh — add scopes for fork/follow (gh auth refresh)");
+      return;
+    }
+
+    if (sub === "login" || sub === "refresh") {
+      if (!isGhCliInstalled()) {
+        console.log(chalk.red("GitHub CLI (gh) is not installed. https://cli.github.com/"));
+        process.exitCode = 1;
+        return;
+      }
+      console.log(chalk.cyan(sub === "login" ? "Opening GitHub sign-in…" : "Refreshing GitHub token scopes…"));
+      try {
+        await runGhAuthInteractive(sub);
+        if (syncGitHubMcpInConfig(config)) saveConfig(config);
+        console.log(chalk.green("\n" + (await formatPostAuthMessage(config))));
+      } catch (error) {
+        console.log(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    if (sub !== "status") {
+      console.log(chalk.yellow(`Unknown action "${action}". Try: gitmentor auth login`));
+      process.exitCode = 1;
+      return;
+    }
+
+    const report = await getGitHubAuthReport(config);
+    console.log(formatGitHubAuthStatusMarkdown(report));
+    if (report.rawStatus) console.log(chalk.dim("\n" + report.rawStatus));
+    if (syncGitHubMcpInConfig(config)) {
+      saveConfig(config);
+      console.log(chalk.dim("\nGitHub MCP server enabled in config."));
+    }
+  });
 
 program.command("roles").action(() => {
   for (const role of listRoles()) {
