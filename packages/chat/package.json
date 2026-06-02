@@ -17,7 +17,9 @@
   "dependencies": {
     "@git-mentor/agents": "workspace:*",
     "@git-mentor/core": "workspace:*",
-    "@git-mentor/llm": "workspace:*"
+    "@git-mentor/github": "workspace:*",
+    "@git-mentor/llm": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.8.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

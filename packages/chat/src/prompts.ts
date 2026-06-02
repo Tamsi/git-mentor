@@ -67,6 +67,27 @@ function formatProfileImprovements(result: AnalysisResult): string {
     .join("\n");
 }
 
+function formatProfileAttractiveness(result: AnalysisResult): string {
+  const attractiveness = result.profile.metadata?.attractiveness as
+    | { score?: number; highlights?: string[]; improvements?: string[] }
+    | undefined;
+  if (!attractiveness?.score) return "";
+
+  const highlights =
+    attractiveness.highlights?.slice(0, 4).map((item) => `- ${item}`).join("\n") ?? "";
+  const improvements =
+    attractiveness.improvements?.slice(0, 4).map((item) => `- ${item}`).join("\n") ?? "";
+
+  return [
+    "Profile attractiveness:",
+    `- Score: ${attractiveness.score}/10`,
+    highlights ? `- Highlights:\n${highlights}` : "",
+    improvements ? `- Top improvements:\n${improvements}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function buildAnalysisContext(result: AnalysisResult, targetRole: string): string {
   const { profile } = result;
   const roles = listRoles().map((r) => `${r.id} (${r.name})`).join(", ");
@@ -79,6 +100,8 @@ export function buildAnalysisContext(result: AnalysisResult, targetRole: string)
     `Primary stack: ${profile.primaryStack.join(", ") || "unknown"}`,
     `Maturity score: ${profile.maturityScore}/10`,
     `Career fit for ${result.gapAnalysis?.targetRole ?? targetRole}: ${result.gapAnalysis?.fitScore ?? "N/A"}/10`,
+    "",
+    formatProfileAttractiveness(result),
     "",
     "Profile summary:",
     profile.summary,
@@ -118,6 +141,7 @@ export function buildSystemPrompt(
   result: AnalysisResult,
   targetRole: string,
   repoAnalyses: RepoAnalysisResult[] = [],
+  agentContextSection = "",
 ): string {
   const repoSection =
     repoAnalyses.length > 0
@@ -132,6 +156,10 @@ export function buildSystemPrompt(
         ].join("\n")
       : "";
 
+  const agentSection = agentContextSection
+    ? ["", agentContextSection, ""]
+    : [];
+
   return [
     "You are git-mentor, an evidence-backed GitHub career coach.",
     "You help developers understand their technical profile, career gaps, and growth opportunities.",
@@ -143,7 +171,8 @@ export function buildSystemPrompt(
     "- When suggesting next steps, tie them to gaps or weaknesses in the data.",
     "- If data is missing, say so and suggest /analyze or /role.",
     "- You can reference slash commands (/gaps, /growth, /export) when helpful.",
-    "",
+    "- Follow any USER RULES and ACTIVE SKILLS sections when present.",
+    ...agentSection,
     "=== VERIFIED GITHUB PROFILE ===",
     buildAnalysisContext(result, targetRole),
     "=== END PROFILE ===",
@@ -152,14 +181,14 @@ export function buildSystemPrompt(
 }
 
 export const OPENING_USER_PROMPT = [
-  "You just finished analyzing this developer's public GitHub profile.",
+  "You just finished auditing this developer's public GitHub profile for attractiveness to hiring managers.",
   "Write a warm opening message (4–6 sentences) as their career coach:",
   "1) Greet them by username",
-  "2) Highlight 2 concrete strengths with evidence from their repos/stack",
+  "2) Comment on profile presentation (bio, README, pins, stats) with 2 concrete highlights",
   "3) Name the biggest gap for their target role",
-  "4) Suggest one high-impact next step from the growth plan",
-  "5) Invite them to ask questions or run /gaps or /growth",
-  "Do not repeat raw scores. Be specific and encouraging.",
+  "4) Suggest one high-impact profile or portfolio improvement",
+  "5) Invite them to ask questions or run /gaps or /improve",
+  "Do not analyze repo source code. Be specific and encouraging.",
 ].join("\n");
 
 export function buildDeterministicOpening(result: AnalysisResult, targetRole: string): string {
@@ -182,25 +211,52 @@ export function buildDeterministicOpening(result: AnalysisResult, targetRole: st
 
 export function buildWelcomeMessage(username: string, roleId: string): string {
   return [
-    `Ready to coach **@${username}** toward **${roleId}**.`,
+    `GitHub identity: **@${username}** · target role **${roleId}**.`,
     "",
-    "Start with **`/analyze profile`** (GitHub career profile — metadata only, no code scan).",
-    "Deep-dive a repo with **`/analyze redbee-mcp`** (manifests & dependencies).",
+    "_Note: your username in the header is not the same as a loaded coaching profile._",
     "",
-    "Then: `/gaps`, `/growth`, `/trending`, `/improve`, or ask questions.",
-    "Type **`/help`** for all commands.",
+    "Connect GitHub with `gh auth login`, then restart — your profile loads automatically.",
+    "Or run **`/analyze profile`** to refresh your attractiveness audit (bio, README, pins, stats, activity).",
+    "",
+    "Commands: `/gaps`, `/growth`, `/trending`, `/improve`, `/help`.",
   ].join("\n");
+}
+
+export function buildProfileReadyMessage(
+  analysis: AnalysisResult,
+  roleId: string,
+  markdownPath: string,
+  options?: { fromCache?: boolean; opening?: string },
+): string {
+  const { profile } = analysis;
+  const attractiveness = profile.metadata?.attractiveness as { score?: number } | undefined;
+  const fit = analysis.gapAnalysis?.fitScore;
+  const loaded = options?.fromCache ? "Loaded from saved dossier" : "Profile analyzed";
+  const lines = [
+    `${loaded} for **@${profile.username}** → **${roleId}**.`,
+    attractiveness?.score != null ? `**Attractiveness:** ${attractiveness.score}/10` : "",
+    fit != null ? `**Role fit:** ${fit}/10` : "",
+    "",
+    `Coaching context saved to \`${markdownPath}\` — the model reads this dossier on every reply.`,
+    "",
+    options?.opening?.trim() ?? buildDeterministicOpening(analysis, roleId),
+    "",
+    "Try `/gaps`, `/growth`, `/improve`, `/trending`, or ask anything about your GitHub profile.",
+    "Run **`/analyze profile`** to refresh after you update bio, pins, or README.",
+  ];
+  return lines.filter((line) => line !== "").join("\n");
 }
 
 export const WELCOME_MESSAGE = [
   "Welcome to git-mentor chat.",
-  "Run /analyze profile for your GitHub career profile, or /analyze <repo> for a repository deep scan.",
+  "Your GitHub profile loads automatically when `gh` is connected.",
+  "Refresh with /analyze profile · deep-scan a repo with /analyze <repo>.",
   "",
-  "Commands: /analyze profile · /analyze <repo> · /role · /model · /model signin · /gaps · /growth · /trending · /improve · /export · /help · /quit",
+  "Commands: /analyze profile · /analyze <repo> · /role · /model · /rules · /skills · /mcp · /gaps · /growth · /trending · /improve · /export · /help · /quit",
 ].join("\n");
 
 export const NEED_ANALYSIS_MESSAGE =
-  "No profile loaded yet. Run **`/analyze profile`** first, then ask your question.";
+  "No GitHub profile loaded. Connect with `gh auth login` or run **`/analyze profile`** (or `/analyze profile @user`).";
 
 export function formatToolResult(label: string, body: string): string {
   return `**${label}**\n\n${body}`;

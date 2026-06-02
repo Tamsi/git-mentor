@@ -8,6 +8,7 @@ export function Header(props: {
   roleId: string;
   provider: string;
   model: string;
+  profileLoaded: boolean;
 }) {
   return (
     <Box flexDirection="column" marginBottom={1}>
@@ -19,11 +20,12 @@ export function Header(props: {
       <Text color={colors.muted}>
         {" "}
         @{props.username} · {props.roleId} · {props.provider}/{props.model}
+        {props.profileLoaded ? " · profile loaded" : " · profile not loaded"}
       </Text>
       <TipsBox>
         <Text>
           <Text color={colors.brand}>{"> "}</Text>
-          /model · /model signin · /analyze profile · /help
+          /model · /gaps · /growth · /improve · /help
         </Text>
       </TipsBox>
     </Box>

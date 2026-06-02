@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Box, useApp, useInput } from "ink";
 import { ChatSession, type ContextSnapshot } from "@git-mentor/chat";
-import { loadConfig } from "@git-mentor/core";
+import { loadConfig, markModelConfigured, needsModelOnboarding } from "@git-mentor/core";
 import { ChatFooter } from "./ChatFooter.js";
 import { ChatMessageView, type ChatMessageRole } from "./ChatMessageView.js";
 import { Header } from "./Header.js";
 import { ModelSelectView, SignInView, type ModelPickerResult } from "./ModelSelectView.js";
 import { RichText } from "./RichText.js";
 
-type View = "chat" | "model-select" | "signin";
+type View = "chat" | "model-select" | "signin" | "model-onboarding";
 
 interface ChatMessage {
   id: string;
@@ -46,12 +46,20 @@ export function ChatApp(props: {
   const { exit } = useApp();
   const config = useMemo(() => {
     const loaded = loadConfig();
-    if (props.deterministic) loaded.llm.provider = "deterministic";
+    if (props.deterministic) {
+      loaded.llm.provider = "deterministic";
+      markModelConfigured(loaded);
+    }
     return loaded;
   }, [props.deterministic]);
 
   const [session] = useState(() => new ChatSession(config, props.username, props.roleId));
-  const [view, setView] = useState<View>("chat");
+  const [modelConfigured, setModelConfigured] = useState(
+    () => props.deterministic || config.llm.modelConfigured,
+  );
+  const [view, setView] = useState<View>(() =>
+    !props.deterministic && needsModelOnboarding(config) ? "model-onboarding" : "chat",
+  );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -74,17 +82,43 @@ export function ChatApp(props: {
     }
   });
 
-  useEffect(() => {
-    void session.bootstrap().then((reply) => {
-      setMessages([{ id: "bootstrap", content: reply.content, role: "assistant" }]);
-      refreshContextStats();
-    });
+  const startBootstrap = useCallback(() => {
+    setBusy(true);
+    void session
+      .bootstrap((message) => setProgress(message.replace(/\*\*/g, "")))
+      .then((reply) => {
+        setMessages([{ id: "bootstrap", content: reply.content, role: "assistant" }]);
+        refreshContextStats();
+      })
+      .finally(() => {
+        setBusy(false);
+        setProgress(null);
+      });
     void session.ensureLlmReady().then(() => {
       const next = session.getConfig().llm;
       setLlmInfo({ provider: next.provider, model: next.model });
       refreshContextStats();
     });
   }, [session, refreshContextStats]);
+
+  useEffect(() => {
+    if (!modelConfigured) return;
+    startBootstrap();
+  }, [modelConfigured, startBootstrap]);
+
+  const handleOnboardingDone = useCallback(
+    (result: ModelPickerResult) => {
+      const next = session.getConfig().llm;
+      if (result.changed && result.model) {
+        session.setModel(result.model);
+      }
+      markModelConfigured(session.getConfig());
+      setLlmInfo({ provider: next.provider, model: session.getConfig().llm.model });
+      setModelConfigured(true);
+      setView("chat");
+    },
+    [session],
+  );
 
   const appendMessage = useCallback((content: string, role: ChatMessageRole) => {
     if (!content || content === "__EXIT__") return;
@@ -173,6 +207,16 @@ export function ChatApp(props: {
     [appendMessage, busy, exit, refreshContextStats, session],
   );
 
+  if (view === "model-onboarding") {
+    return (
+      <ModelSelectView
+        config={session.getConfig()}
+        firstRun
+        onDone={handleOnboardingDone}
+      />
+    );
+  }
+
   if (view === "model-select") {
     return <ModelSelectView config={session.getConfig()} onDone={handlePickerDone} />;
   }
@@ -190,6 +234,7 @@ export function ChatApp(props: {
         roleId={props.roleId}
         provider={llmInfo.provider || llm.provider}
         model={llmInfo.model || llm.model}
+        profileLoaded={contextStats.profileLoaded}
       />
 
       <Box flexDirection="column" marginBottom={1} flexGrow={1}>

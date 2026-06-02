@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import {
   AnalysisPipeline,
   CoachingService,
@@ -12,15 +10,23 @@ import {
   type AnalysisResult,
   type GitMentorConfig,
   type RepoAnalysisResult,
+  type AgentContextBundle,
+  formatAgentContextForPrompt,
+  formatRulesList,
+  formatSkillsList,
+  loadAgentContext,
+  loadProfileDossier,
+  profileDossierPaths,
+  saveProfileDossier,
   listRoles,
-  renderMarkdown,
-  REPORTS_DIR,
   ensureDirs,
   saveConfig,
 } from "@git-mentor/core";
+import { hasGitHubAuth, ensureGitHubMcpServer } from "@git-mentor/github";
 import { LLMRouter, handleModelCommand, type ChatMessage, type LlmUsage, ensureOllamaModel, fetchOllamaContextLimit } from "@git-mentor/llm";
 import {
   buildDeterministicOpening,
+  buildProfileReadyMessage,
   buildSystemPrompt,
   buildWelcomeMessage,
   formatToolResult,
@@ -29,6 +35,16 @@ import {
   OPENING_USER_PROMPT,
 } from "./prompts.js";
 import { buildContextSnapshot, type ContextSnapshot } from "./context-stats.js";
+import {
+  callExternalMcpTool,
+  formatMcpServersList,
+  listExternalMcpTools,
+} from "./mcp-client.js";
+import {
+  forkRepositoryViaGitHubMcp,
+  formatGitHubMcpActionsHint,
+  resolveForkTarget,
+} from "./github-mcp.js";
 
 export type { ContextSnapshot } from "./context-stats.js";
 export { formatContextBar } from "./context-stats.js";
@@ -49,7 +65,7 @@ export type ProgressCallback = (message: string) => void;
 
 const ANALYZE_USAGE = [
   "**Analyze usage**",
-  "- `/analyze profile` — career profile from public GitHub metadata (languages, topics, activity). **No code/manifest scan.**",
+  "- `/analyze profile` — refresh **profile attractiveness** audit: bio, profile README, pins, stats, activity, portfolio presentation. **No manifest/code scan.**",
   "- `/analyze me` — same as `/analyze profile`",
   "- `/analyze profile @user` — same for another user",
   "- `/analyze <repo>` — deep repository analysis (manifests, dependencies), e.g. `/analyze redbee-mcp` or `/analyze owner/repo`",
@@ -98,6 +114,7 @@ export class ChatSession {
   private lastUsage?: LlmUsage;
   private sessionPromptTokens = 0;
   private sessionCompletionTokens = 0;
+  private agentBundle: AgentContextBundle;
 
   constructor(
     private config: GitMentorConfig,
@@ -108,6 +125,83 @@ export class ChatSession {
     this.coaching = new CoachingService(config);
     this.router = new LLMRouter(config);
     this.roleId = roleId ?? config.defaultRole;
+    this.agentBundle = loadAgentContext(this.config);
+    this.ensureGitHubMcp();
+  }
+
+  private reloadAgentContext(): void {
+    this.agentBundle = loadAgentContext(this.config);
+  }
+
+  private getAgentPromptSection(): string {
+    return formatAgentContextForPrompt(this.agentBundle, this.config);
+  }
+
+  private buildSessionSystemPrompt(): string {
+    if (!this.profileAnalysis) return "";
+    const agentSection = this.getAgentPromptSection();
+    const githubMcpSection = formatGitHubMcpActionsHint(this.config);
+    const combinedAgent = [agentSection, githubMcpSection].filter(Boolean).join("\n\n");
+    return buildSystemPrompt(
+      this.profileAnalysis,
+      this.roleId,
+      [...this.repoAnalyses.values()],
+      combinedAgent,
+    );
+  }
+
+  private ensureGitHubMcp(): void {
+    if (ensureGitHubMcpServer(this.config)) {
+      saveConfig(this.config);
+    }
+  }
+
+  private trendingReposForFork(): import("@git-mentor/core").TrendingRepo[] {
+    return this.profileAnalysis?.actionPlan?.trendingRepos ?? [];
+  }
+
+  private async runForkCommand(repoArg: string, onProgress?: ProgressCallback): Promise<ChatReply> {
+    if (!repoArg.trim()) {
+      return {
+        content: "Usage: `/fork owner/repo` or `/fork reponame` (matches last `/trending` list).",
+        toolUsed: "fork",
+      };
+    }
+
+    this.ensureGitHubMcp();
+
+    const target = resolveForkTarget(repoArg, this.trendingReposForFork());
+    if (!target) {
+      return {
+        content: formatToolResult(
+          "Could not resolve repository",
+          `Unknown repo \`${repoArg}\`. Use \`owner/repo\` or run \`/trending\` first, then \`/fork reponame\`.`,
+        ),
+        toolUsed: "fork",
+      };
+    }
+
+    try {
+      onProgress?.(`Forking ${target.owner}/${target.repo} via GitHub MCP…`);
+      const result = await forkRepositoryViaGitHubMcp(this.config, target.owner, target.repo);
+      return {
+        content: formatToolResult(
+          `Forked ${target.owner}/${target.repo}`,
+          `${result}\n\nNext: clone your fork, create a branch, and open a PR back to upstream.`,
+        ),
+        toolUsed: "fork",
+      };
+    } catch (error) {
+      return { content: formatCommandError(error), toolUsed: "fork" };
+    }
+  }
+
+  private tryGitHubActionInput(input: string, onProgress?: ProgressCallback): Promise<ChatReply> | null {
+    const forkMatch = input.match(/^fork\s+(.+)$/i);
+    if (forkMatch?.[1]) {
+      return this.runForkCommand(forkMatch[1], onProgress);
+    }
+    return null;
   }
 
   private refreshLlmClients(): void {
@@ -172,6 +266,7 @@ export class ChatSession {
       lastUsage: this.lastUsage,
       sessionPromptTokens: this.sessionPromptTokens,
       sessionCompletionTokens: this.sessionCompletionTokens,
+      agentContextSection: this.getAgentPromptSection(),
     });
   }
 
@@ -202,7 +297,47 @@ export class ChatSession {
     return [...this.history];
   }
 
-  async bootstrap(): Promise<ChatReply> {
+  async bootstrap(onProgress?: ProgressCallback): Promise<ChatReply> {
+    const cached = loadProfileDossier(this.username, this.roleId, this.config.cacheTtlHours);
+    if (cached) {
+      this.profileAnalysis = cached;
+      this.resetSessionUsage();
+      const content = buildProfileReadyMessage(cached, this.roleId, profileDossierPaths(this.username).markdown, {
+        fromCache: true,
+      });
+      this.history.push({ role: "assistant", content });
+      return { content, toolUsed: "bootstrap", analysis: cached };
+    }
+
+    if (hasGitHubAuth(this.config)) {
+      this.ensureGitHubMcp();
+      try {
+        await this.syncOllamaModel(onProgress);
+        const opening = await this.runProfileAnalysis(onProgress);
+        const content = buildProfileReadyMessage(
+          this.profileAnalysis!,
+          this.roleId,
+          profileDossierPaths(this.username).markdown,
+          { opening },
+        );
+        this.history.push({ role: "assistant", content });
+        return {
+          content,
+          toolUsed: "bootstrap",
+          analysis: this.profileAnalysis ?? undefined,
+        };
+      } catch (error) {
+        const fallback = [
+          buildWelcomeMessage(this.username, this.roleId),
+          "",
+          `_GitHub identity resolved as @${this.username}, but profile analysis failed: ${error instanceof Error ? error.message : String(error)}_`,
+          "Try **`/analyze profile`** to retry (GitHub data loads even if the LLM is down).",
+        ].join("\n");
+        this.history.push({ role: "assistant", content: fallback });
+        return { content: fallback, toolUsed: "bootstrap" };
+      }
+    }
+
     const content = buildWelcomeMessage(this.username, this.roleId);
     this.history.push({ role: "assistant", content });
     return { content, toolUsed: "bootstrap" };
@@ -216,15 +351,16 @@ export class ChatSession {
       return this.handleCommand(trimmed, onProgress);
     }
 
+    const githubAction = this.tryGitHubActionInput(trimmed, onProgress);
+    if (githubAction) {
+      return githubAction;
+    }
+
     if (!this.profileAnalysis) {
       return { content: NEED_ANALYSIS_MESSAGE };
     }
 
-    const systemPrompt = buildSystemPrompt(
-      this.profileAnalysis,
-      this.roleId,
-      [...this.repoAnalyses.values()],
-    );
+    const systemPrompt = this.buildSessionSystemPrompt();
     const messages = messagesForChat(systemPrompt, this.history, trimmed);
     await this.syncOllamaModel(onProgress);
     const reply = await this.router.chat(messages);
@@ -253,17 +389,21 @@ export class ChatSession {
       return;
     }
 
+    const githubAction = this.tryGitHubActionInput(trimmed, onProgress);
+    if (githubAction) {
+      const reply = await githubAction;
+      yield { type: "token", content: reply.content };
+      yield { type: "done", content: reply.content, analysis: reply.analysis };
+      return;
+    }
+
     if (!this.profileAnalysis) {
       yield { type: "token", content: NEED_ANALYSIS_MESSAGE };
       yield { type: "done", content: NEED_ANALYSIS_MESSAGE };
       return;
     }
 
-    const systemPrompt = buildSystemPrompt(
-      this.profileAnalysis,
-      this.roleId,
-      [...this.repoAnalyses.values()],
-    );
+    const systemPrompt = this.buildSessionSystemPrompt();
     const messages = messagesForChat(systemPrompt, this.history, trimmed);
     await this.syncOllamaModel(onProgress);
     let full = "";
@@ -284,6 +424,7 @@ export class ChatSession {
 
   private async runProfileAnalysis(onProgress?: ProgressCallback): Promise<string> {
     onProgress?.(`Analyzing GitHub profile @${this.username}…`);
+    await this.syncOllamaModel(onProgress);
 
     this.profileAnalysis = await this.pipeline.runProfile({
       username: this.username,
@@ -291,6 +432,7 @@ export class ChatSession {
       onProgress,
     });
     this.resetSessionUsage();
+    saveProfileDossier(this.profileAnalysis, this.roleId);
 
     onProgress?.("Building coaching brief…");
 
@@ -298,11 +440,7 @@ export class ChatSession {
       return buildDeterministicOpening(this.profileAnalysis, this.roleId);
     }
 
-    const systemPrompt = buildSystemPrompt(
-      this.profileAnalysis,
-      this.roleId,
-      [...this.repoAnalyses.values()],
-    );
+    const systemPrompt = this.buildSessionSystemPrompt();
 
     try {
       await this.syncOllamaModel(onProgress);
@@ -389,8 +527,8 @@ export class ChatSession {
         this.roleId = arg;
         this.config.defaultRole = arg;
         const hint = this.profileAnalysis
-          ? "Target role updated. Run **`/analyze profile`** to refresh gap analysis."
-          : "Target role updated. Run **`/analyze profile`** to load your GitHub profile.";
+          ? "Target role updated. Run **`/analyze profile`** to refresh gap analysis for the new role."
+          : "Target role updated.";
         return { content: formatToolResult(`Target role → ${this.roleId}`, hint), toolUsed: "role" };
       }
       case "model": {
@@ -440,9 +578,15 @@ export class ChatSession {
           this.profileAnalysis.actionPlan.trendingRepos = repos;
         }
         return {
-          content: formatToolResult("Trending repos for your expertise", formatTrendingReposMarkdown(repos)),
+          content: formatToolResult(
+            "Trending repos for your expertise",
+            `${formatTrendingReposMarkdown(repos)}\n\nFork one with \`/fork owner/repo\` or \`fork reponame\` (uses GitHub MCP).`,
+          ),
           toolUsed: "trending",
         };
+      }
+      case "fork": {
+        return this.runForkCommand(args.join(" "), onProgress);
       }
       case "improve": {
         if (!this.profileAnalysis) return { content: NEED_ANALYSIS_MESSAGE };
@@ -461,9 +605,137 @@ export class ChatSession {
       case "export": {
         if (!this.profileAnalysis) return { content: NEED_ANALYSIS_MESSAGE };
         ensureDirs();
-        const file = path.join(REPORTS_DIR, `${this.profileAnalysis.profile.username}.md`);
-        fs.writeFileSync(file, renderMarkdown(this.profileAnalysis));
-        return { content: `Dossier exported to \`${file}\``, toolUsed: "export" };
+        const paths = saveProfileDossier(this.profileAnalysis, this.roleId);
+        return {
+          content: `Profile dossier exported to \`${paths.markdown}\` (JSON: \`${paths.json}\`)`,
+          toolUsed: "export",
+        };
+      }
+      case "rules": {
+        const sub = args[0]?.toLowerCase();
+        if (sub === "reload") {
+          this.reloadAgentContext();
+          return {
+            content: formatToolResult(
+              "Rules reloaded",
+              `${this.agentBundle.rules.length} rule(s) loaded.\n\n${formatRulesList(this.agentBundle.rules)}`,
+            ),
+            toolUsed: "rules",
+          };
+        }
+        if (sub === "off") {
+          this.config.agent.rulesEnabled = false;
+          saveConfig(this.config);
+          return { content: "User rules disabled for LLM prompts. Run `/rules on` to re-enable.", toolUsed: "rules" };
+        }
+        if (sub === "on") {
+          this.config.agent.rulesEnabled = true;
+          saveConfig(this.config);
+          return { content: "User rules enabled for LLM prompts.", toolUsed: "rules" };
+        }
+        return {
+          content: formatToolResult(
+            `Rules (${this.config.agent.rulesEnabled ? "enabled" : "disabled"})`,
+            `${formatRulesList(this.agentBundle.rules)}\n\nAdd \`.md\` files to \`~/.config/git-mentor/rules/\` or \`.git-mentor/rules/\`. Commands: \`/rules reload\`, \`/rules on|off\`.`,
+          ),
+          toolUsed: "rules",
+        };
+      }
+      case "skills": {
+        const sub = args[0]?.toLowerCase();
+        const skillId = args[1];
+
+        if (sub === "use" && skillId) {
+          if (!this.agentBundle.skills.some((skill) => skill.id === skillId)) {
+            return { content: `Unknown skill \`${skillId}\`. Run \`/skills\` to list available skills.` };
+          }
+          if (!this.config.agent.activeSkills.includes(skillId)) {
+            this.config.agent.activeSkills.push(skillId);
+            saveConfig(this.config);
+          }
+          this.reloadAgentContext();
+          return {
+            content: formatToolResult(`Skill activated: ${skillId}`, formatSkillsList(this.agentBundle)),
+            toolUsed: "skills",
+          };
+        }
+
+        if (sub === "off" && skillId) {
+          this.config.agent.activeSkills = this.config.agent.activeSkills.filter((id) => id !== skillId);
+          saveConfig(this.config);
+          this.reloadAgentContext();
+          return {
+            content: formatToolResult(`Skill deactivated: ${skillId}`, formatSkillsList(this.agentBundle)),
+            toolUsed: "skills",
+          };
+        }
+
+        if (sub === "reload") {
+          this.reloadAgentContext();
+          return {
+            content: formatToolResult("Skills reloaded", formatSkillsList(this.agentBundle)),
+            toolUsed: "skills",
+          };
+        }
+
+        return {
+          content: formatToolResult(
+            `Skills (${this.config.agent.skillsEnabled ? "enabled" : "disabled"})`,
+            `${formatSkillsList(this.agentBundle)}\n\nCommands: \`/skills use <id>\`, \`/skills off <id>\`, \`/skills reload\`.`,
+          ),
+          toolUsed: "skills",
+        };
+      }
+      case "mcp": {
+        const sub = args[0]?.toLowerCase();
+        if (!sub || sub === "list") {
+          return { content: formatMcpServersList(this.config), toolUsed: "mcp" };
+        }
+        if (sub === "tools" && args[1]) {
+          try {
+            onProgress?.(`Listing tools for MCP server ${args[1]}…`);
+            const tools = await listExternalMcpTools(this.config, args[1]!);
+            const body = tools.map((tool) => `- \`${tool.name}\`${tool.description ? ` — ${tool.description}` : ""}`).join("\n");
+            return {
+              content: formatToolResult(`Tools — ${args[1]}`, body || "No tools returned."),
+              toolUsed: "mcp",
+            };
+          } catch (error) {
+            return { content: formatCommandError(error), toolUsed: "mcp" };
+          }
+        }
+        if (sub === "call" && args[1] && args[2]) {
+          const jsonArg = args.slice(3).join(" ");
+          let parsed: Record<string, unknown> = {};
+          if (jsonArg) {
+            try {
+              parsed = JSON.parse(jsonArg) as Record<string, unknown>;
+            } catch {
+              return { content: "Invalid JSON arguments. Example: `/mcp call github search_repositories {\"query\":\"mcp\"}`" };
+            }
+          }
+          try {
+            onProgress?.(`Calling ${args[1]}.${args[2]}…`);
+            const result = await callExternalMcpTool(this.config, args[1]!, args[2]!, parsed);
+            return {
+              content: formatToolResult(`MCP ${args[1]}.${args[2]}`, result),
+              toolUsed: "mcp",
+            };
+          } catch (error) {
+            return { content: formatCommandError(error), toolUsed: "mcp" };
+          }
+        }
+        return {
+          content: [
+            "**MCP commands**",
+            "- `/mcp` — list built-in and configured MCP servers",
+            "- `/mcp tools <server>` — list tools from an external server",
+            "- `/mcp call <server> <tool> [json]` — invoke an external tool",
+            "",
+            "Run `gitmentor mcp` to expose git-mentor tools to Cursor.",
+          ].join("\n"),
+          toolUsed: "mcp",
+        };
       }
       case "help":
         return {
@@ -477,11 +749,15 @@ export class ChatSession {
             "- /gaps — career gap analysis (requires /analyze profile)",
             "- /growth — recommendations",
             "- /trending — discover trending repos",
+            "- /fork <repo> — fork via GitHub MCP (after /trending or owner/repo)",
             "- /improve — GitHub profile improvement plan",
             "- /export — save Markdown dossier",
+            "- /rules — list coaching rules · /rules reload · /rules on|off",
+            "- /skills — list skills · /skills use <id> · /skills off <id>",
+            "- /mcp — MCP servers and external tool bridge",
             "- /help · /quit",
             "",
-            "Free-form chat works after **`/analyze profile`**.",
+            "Free-form chat works once your profile is loaded (automatic with `gh auth`).",
           ].join("\n"),
         };
       case "quit":

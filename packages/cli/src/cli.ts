@@ -8,6 +8,7 @@ import {
   ensureDirs,
   listRoles,
   loadConfig,
+  markModelConfigured,
   renderMarkdown,
   REPORTS_DIR,
   saveConfig,
@@ -15,6 +16,8 @@ import {
 import { LLMRouter } from "@git-mentor/llm";
 import chalk from "chalk";
 import { Command } from "commander";
+import { bootstrapAgentAssets } from "./agent-bootstrap.js";
+import { ensureGitHubMcpServer } from "@git-mentor/github";
 import { theme } from "./ui/theme.js";
 
 const program = new Command();
@@ -115,8 +118,18 @@ program
     config.llm.model = opts.model;
     config.llm.baseUrl = opts.baseUrl;
     config.defaultRole = opts.role;
+    markModelConfigured(config);
+    ensureGitHubMcpServer(config);
     saveConfig(config);
+    const agent = bootstrapAgentAssets();
     console.log(chalk.green(`Config written to ${CONFIG_FILE}`));
+    if (agent.rulesCopied > 0 || agent.skillsCopied > 0) {
+      console.log(
+        chalk.green(
+          `Agent assets installed: ${agent.rulesCopied} rule(s), ${agent.skillsCopied} skill folder(s).`,
+        ),
+      );
+    }
   });
 
 program.command("auth").action(() => {

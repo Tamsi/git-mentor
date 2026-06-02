@@ -1,6 +1,7 @@
 import {
   getRole,
   SkillSignalsEngine,
+  analyzeProfileAttractiveness,
   type AgentStepTrace,
   type AnalysisResult,
   type DeveloperProfile,
@@ -49,18 +50,36 @@ export class ProfileSynthesizerAgent {
   async synthesize(
     githubData: GitHubProfileData,
     signals: ReturnType<SkillSignalsEngine["extract"]>,
+    attractiveness?: ReturnType<typeof analyzeProfileAttractiveness>,
   ): Promise<[DeveloperProfile, AgentStepTrace]> {
     const started = Date.now();
     const profile = this.signalsEngine.buildProfile(signals);
+    if (attractiveness) {
+      profile.metadata = {
+        ...profile.metadata,
+        attractiveness,
+        profileReadmePresent: attractiveness.profileReadmePresent,
+        pinnedCount: attractiveness.pinnedCount,
+        recentActivityCount: attractiveness.recentActivityCount,
+      };
+    }
 
     const prompt =
-      `Rewrite this developer profile summary in 2 sentences, factual, no scores:\n` +
-      `${profile.summary}\nStack: ${profile.primaryStack.join(", ")}\n` +
-      `Strengths: ${profile.strengths.join(", ")}\nWeaknesses: ${profile.weaknesses.join(", ")}`;
+      `Write a 2-sentence GitHub profile attractiveness summary for a hiring manager scanning this developer's public profile.\n` +
+      `Focus on: bio, profile README, pinned repos, stats, portfolio presentation — not code-level repo analysis.\n` +
+      `${profile.summary}\n` +
+      `Attractiveness score: ${attractiveness?.score ?? "N/A"}/10\n` +
+      `Stack: ${profile.primaryStack.join(", ")}\n` +
+      `Strengths: ${profile.strengths.join(", ")}\n` +
+      `Weaknesses: ${profile.weaknesses.join(", ")}`;
 
-    const llm = await this.router.complete(prompt, "You write evidence-backed developer profile summaries.");
-    if (llm.content.trim() && llm.provider !== "deterministic") {
-      profile.summary = llm.content.trim();
+    try {
+      const llm = await this.router.complete(prompt, "You write evidence-backed developer profile summaries.");
+      if (llm.content.trim() && llm.provider !== "deterministic") {
+        profile.summary = llm.content.trim();
+      }
+    } catch {
+      // Rule-based summary from GitHub signals remains when LLM is unavailable.
     }
 
     return [
@@ -115,11 +134,15 @@ export class CareerCoachAgent {
     const fitScore = Math.max(1, 10 - gaps.length * 0.8);
     let summary = `Fit for ${role.name}: ${fitScore.toFixed(1)}/10. ${strengths.length} aligned strengths, ${gaps.length} gaps to close.`;
 
-    const llm = await this.router.complete(
-      `Improve this one-sentence career summary for a developer targeting ${role.name}:\n${summary}\nProfile: ${profile.summary}\nKeep under 40 words, factual.`,
-      "You are a staff engineer writing concise career feedback.",
-    );
-    if (llm.content.trim()) summary = llm.content.trim();
+    try {
+      const llm = await this.router.complete(
+        `Improve this one-sentence career summary for a developer targeting ${role.name}:\n${summary}\nProfile: ${profile.summary}\nKeep under 40 words, factual.`,
+        "You are a staff engineer writing concise career feedback.",
+      );
+      if (llm.content.trim()) summary = llm.content.trim();
+    } catch {
+      // Rule-based gap summary remains when LLM is unavailable.
+    }
 
     return [
       {
@@ -296,11 +319,12 @@ export class AnalysisPipeline {
       ));
     traces.push(trace("supervisor", "github-ingest", ingestStarted, `username=${options.username}`, `repos=${githubData.repos.length}`));
 
+    const attractiveness = analyzeProfileAttractiveness(githubData);
     const signalsStarted = Date.now();
     const signals = this.signalsEngine.extract(githubData);
     traces.push(trace("supervisor", "skill-signals", signalsStarted, `repos=${githubData.repos.length}`, `languages=${Object.keys(signals.languages).length}`));
 
-    const [profile, profileTrace] = await this.profileAgent.synthesize(githubData, signals);
+    const [profile, profileTrace] = await this.profileAgent.synthesize(githubData, signals, attractiveness);
     traces.push(profileTrace);
 
     let gapAnalysis: GapAnalysis | undefined;

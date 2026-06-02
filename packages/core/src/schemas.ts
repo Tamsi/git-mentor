@@ -186,6 +186,8 @@ export interface GitHubRepoData {
   stargazers_count?: number;
   topics?: string[];
   dependency_markers?: string[];
+  pushed_at?: string | null;
+  fork?: boolean;
 }
 
 export interface GitHubUserData {
@@ -193,9 +195,26 @@ export interface GitHubUserData {
   name?: string | null;
   bio?: string | null;
   public_repos?: number;
+  followers?: number;
+  following?: number;
+  public_gists?: number;
+  company?: string | null;
+  location?: string | null;
+  blog?: string | null;
+  twitter_username?: string | null;
+  created_at?: string;
+}
+
+export interface GitHubActivityEvent {
+  type: string;
+  repo: string;
+  createdAt: string;
 }
 
 export interface GitHubProfileData {
   user: GitHubUserData;
   repos: GitHubRepoData[];
+  profileReadme?: string | null;
+  pinnedRepos?: GitHubRepoData[];
+  recentActivity?: GitHubActivityEvent[];
 }

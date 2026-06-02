@@ -12,7 +12,7 @@ describe("context stats", () => {
       sessionPromptTokens: 0,
       sessionCompletionTokens: 0,
     });
-    expect(formatContextBar(snapshot)).toContain("/analyze profile");
+    expect(formatContextBar(snapshot)).toContain("profile not loaded");
   });
 
   it("formats context usage after profile load", () => {

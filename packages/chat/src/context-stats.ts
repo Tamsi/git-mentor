@@ -35,9 +35,15 @@ export function buildContextSnapshot(options: {
   lastUsage?: LlmUsage;
   sessionPromptTokens: number;
   sessionCompletionTokens: number;
+  agentContextSection?: string;
 }): ContextSnapshot {
   const systemPrompt = options.profileAnalysis
-    ? buildSystemPrompt(options.profileAnalysis, options.roleId, options.repoAnalyses)
+    ? buildSystemPrompt(
+        options.profileAnalysis,
+        options.roleId,
+        options.repoAnalyses,
+        options.agentContextSection ?? "",
+      )
     : "";
   const systemPromptTokens = estimateTokens(systemPrompt);
   const historyTokens = estimateMessagesTokens(options.history);
@@ -67,7 +73,7 @@ export function buildContextSnapshot(options: {
 
 export function formatContextBar(snapshot: ContextSnapshot): string {
   if (!snapshot.profileLoaded) {
-    return `context — / ${formatTokenCount(snapshot.contextLimit)} · run /analyze profile to load coaching context`;
+    return `context — / ${formatTokenCount(snapshot.contextLimit)} · profile not loaded · run /analyze profile`;
   }
 
   const bar = renderContextMeter(snapshot.contextPercent);

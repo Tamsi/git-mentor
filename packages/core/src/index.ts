@@ -3,3 +3,6 @@ export * from "./config.js";
 export * from "./roles.js";
 export * from "./signals.js";
 export * from "./export.js";
+export * from "./agent-context.js";
+export * from "./profile-attractiveness.js";
+export * from "./profile-dossier.js";

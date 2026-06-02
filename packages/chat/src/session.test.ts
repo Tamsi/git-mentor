@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import fs from "node:fs";
 
 vi.mock("@git-mentor/llm", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@git-mentor/llm")>();
@@ -11,11 +12,27 @@ vi.mock("@git-mentor/llm", async (importOriginal) => {
   };
 });
 
-import { GitMentorConfigSchema } from "@git-mentor/core";
+vi.mock("@git-mentor/github", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@git-mentor/github")>();
+  return {
+    ...actual,
+    hasGitHubAuth: vi.fn(() => false),
+  };
+});
+
+import { GitMentorConfigSchema, profileDossierPaths, saveProfileDossier } from "@git-mentor/core";
 import { buildDeterministicOpening } from "./prompts.js";
 import { ChatSession, formatCommandError, isProfileAnalyzeTarget } from "./session.js";
 
 describe("ChatSession", () => {
+  beforeEach(() => {
+    for (const username of ["octocat", "fresh-user"]) {
+      const paths = profileDossierPaths(username);
+      for (const file of [paths.json, paths.markdown]) {
+        if (fs.existsSync(file)) fs.unlinkSync(file);
+      }
+    }
+  });
   it("handles /help without analysis", async () => {
     const config = GitMentorConfigSchema.parse({ llm: { provider: "deterministic" } });
     const session = new ChatSession(config, "octocat", "ai-engineer");
@@ -23,12 +40,59 @@ describe("ChatSession", () => {
     expect(reply.content).toContain("/analyze profile");
   });
 
-  it("bootstrap does not load GitHub data", async () => {
+  it("bootstrap shows welcome when no auth and no dossier", async () => {
     const config = GitMentorConfigSchema.parse({ llm: { provider: "deterministic" } });
-    const session = new ChatSession(config, "octocat", "ai-engineer");
+    const session = new ChatSession(config, "fresh-user", "ai-engineer");
     const reply = await session.bootstrap();
     expect(reply.analysis).toBeUndefined();
-    expect(reply.content).toContain("/analyze profile");
+    expect(reply.content).toContain("username in the header");
+  });
+
+  it("bootstrap loads saved profile dossier", async () => {
+    const config = GitMentorConfigSchema.parse({ llm: { provider: "deterministic" } });
+    saveProfileDossier(
+      {
+        profile: {
+          username: "octocat",
+          analyzedAt: new Date().toISOString(),
+          summary: "Cached profile",
+          primaryStack: ["TypeScript"],
+          skills: [],
+          domains: [],
+          strengths: [],
+          weaknesses: [],
+          maturityScore: 6,
+          repoCount: 4,
+          publicRepos: 4,
+          totalStars: 12,
+          metadata: { attractiveness: { score: 7, highlights: [], improvements: [] } },
+        },
+        gapAnalysis: {
+          targetRole: "AI Engineer",
+          fitScore: 7,
+          summary: "Good fit",
+          gaps: [],
+          learningPlan: [],
+          strengthsForRole: ["TypeScript"],
+        },
+        actionPlan: {
+          generatedAt: new Date().toISOString(),
+          recommendations: [],
+          technologiesToLearn: [],
+          reposToWatch: [],
+          ossOpportunities: [],
+          trendingRepos: [],
+          profileImprovements: [],
+        },
+        traces: [],
+        signals: {},
+      },
+      "ai-engineer",
+    );
+    const session = new ChatSession(config, "octocat", "ai-engineer");
+    const reply = await session.bootstrap();
+    expect(reply.analysis?.profile.username).toBe("octocat");
+    expect(reply.content).toContain(".md");
   });
 
   it("analyze without args shows usage", async () => {
@@ -36,7 +100,7 @@ describe("ChatSession", () => {
     const session = new ChatSession(config, "octocat", "ai-engineer");
     const reply = await session.handleInput("/analyze");
     expect(reply.content).toContain("profile");
-    expect(reply.content).toContain("manifest");
+    expect(reply.content).toContain("attractiveness");
   });
 
   it("treats /analyze me as profile analysis target", () => {
@@ -50,12 +114,12 @@ describe("ChatSession", () => {
     expect(formatCommandError(new Error("Ollama error: model 'x' not found"))).toContain("LLM error");
   });
 
-  it("prompts for /analyze before free-form chat", async () => {
+  it("prompts for profile before slash commands without dossier", async () => {
     const config = GitMentorConfigSchema.parse({ llm: { provider: "deterministic" } });
-    const session = new ChatSession(config, "octocat", "ai-engineer");
+    const session = new ChatSession(config, "fresh-user", "ai-engineer");
     await session.bootstrap();
-    const reply = await session.handleInput("What are my gaps?");
-    expect(reply.content).toContain("/analyze profile");
+    const reply = await session.handleInput("/trending");
+    expect(reply.content).toContain("gh auth login");
   });
 
   it("model command shows current config", async () => {

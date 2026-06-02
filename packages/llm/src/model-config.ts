@@ -1,4 +1,5 @@
 import type { GitMentorConfig } from "@git-mentor/core";
+import { markModelConfigured } from "@git-mentor/core";
 import { isCloudCatalogName, resolveCloudModelTag } from "./ollama-runtime.js";
 
 export const LLM_PROVIDERS = [
@@ -198,6 +199,11 @@ export async function handleModelCommand(
     config.llm.model = isCloudCatalogName(spec.model, remote)
       ? resolveCloudModelTag(spec.model)
       : spec.model;
+    markModelConfigured(config);
+  }
+
+  if (spec.provider && !spec.model) {
+    markModelConfigured(config);
   }
 
   return {

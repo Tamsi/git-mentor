@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 import { AnalysisPipeline, CoachingService, formatProfileImprovementsMarkdown, formatRepoAnalysisMarkdown, formatTrendingReposMarkdown, parseRepoTarget } from "@git-mentor/agents";
-import { listRoles, loadConfig, renderMarkdown } from "@git-mentor/core";
+import {
+  formatAgentContextForPrompt,
+  formatRulesList,
+  formatSkillsList,
+  listRoles,
+  loadAgentContext,
+  loadConfig,
+  renderMarkdown,
+} from "@git-mentor/core";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -132,6 +140,59 @@ server.tool(
 server.tool("list_target_roles", "List available career target roles", {}, async () => ({
   content: [{ type: "text", text: JSON.stringify(listRoles(), null, 2) }],
 }));
+
+server.tool("list_rules", "List loaded coaching rules (user + project)", {}, async () => {
+  const bundle = loadAgentContext(config);
+  return {
+    content: [
+      {
+        type: "text",
+        text: `# Coaching rules\n\n${formatRulesList(bundle.rules)}`,
+      },
+    ],
+  };
+});
+
+server.tool("list_skills", "List available coaching skills and active selection", {}, async () => {
+  const bundle = loadAgentContext(config);
+  return {
+    content: [
+      {
+        type: "text",
+        text: `# Coaching skills\n\nActive: ${bundle.activeSkillIds.join(", ") || "none"}\n\n${formatSkillsList(bundle)}`,
+      },
+    ],
+  };
+});
+
+server.tool(
+  "get_agent_context",
+  "Return rules + active skills formatted for LLM system prompts",
+  { username: z.string().optional(), role: z.string().default("ai-engineer") },
+  async ({ username, role }) => {
+    const bundle = loadAgentContext(config);
+    const agentSection = formatAgentContextForPrompt(bundle, config);
+
+    let profileSection = "";
+    if (username) {
+      const result = await pipeline.runProfile({
+        username: username.replace(/^@/, ""),
+        roleId: role,
+        includeGrowth: false,
+      });
+      profileSection = `\n\n# Profile snapshot\n\n@${result.profile.username} · fit ${result.gapAnalysis?.fitScore ?? "N/A"}/10 for ${role}`;
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `# Agent context\n\n${agentSection || "_No rules or active skills loaded. Run gitmentor init._"}${profileSection}`,
+        },
+      ],
+    };
+  },
+);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

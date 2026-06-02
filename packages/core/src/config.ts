@@ -25,6 +25,8 @@ const LLMConfigSchema = z.object({
   apiKey: z.string().optional(),
   temperature: z.number().default(0.2),
   maxTokens: z.number().default(4096),
+  /** False until the user picks a default model in the onboarding picker. */
+  modelConfigured: z.boolean().default(false),
 });
 
 const GitHubConfigSchema = z.object({
@@ -32,18 +34,41 @@ const GitHubConfigSchema = z.object({
   useGhCli: z.boolean().default(true),
 });
 
+const AgentConfigSchema = z.object({
+  activeSkills: z.array(z.string()).default(["gap-coaching", "github-profile-optimization", "github-mcp-actions"]),
+  rulesEnabled: z.boolean().default(true),
+  skillsEnabled: z.boolean().default(true),
+});
+
+const McpServerConfigSchema = z.object({
+  name: z.string(),
+  command: z.string(),
+  args: z.array(z.string()).default([]),
+  env: z.record(z.string()).optional(),
+  enabled: z.boolean().default(true),
+});
+
+const McpConfigSchema = z.object({
+  servers: z.array(McpServerConfigSchema).default([]),
+});
+
 export const GitMentorConfigSchema = z.object({
   llm: LLMConfigSchema.default({}),
   github: GitHubConfigSchema.default({}),
   defaultRole: z.string().default("ai-engineer"),
   cacheTtlHours: z.number().default(24),
+  agent: AgentConfigSchema.default({}),
+  mcp: McpConfigSchema.default({}),
 });
 
 export type GitMentorConfig = z.infer<typeof GitMentorConfigSchema>;
 export type LLMConfig = z.infer<typeof LLMConfigSchema>;
 
+export const RULES_DIR = path.join(CONFIG_DIR, "rules");
+export const SKILLS_DIR = path.join(CONFIG_DIR, "skills");
+
 export function ensureDirs(): void {
-  for (const dir of [CONFIG_DIR, DATA_DIR, CACHE_DIR, REPORTS_DIR]) {
+  for (const dir of [CONFIG_DIR, DATA_DIR, CACHE_DIR, REPORTS_DIR, RULES_DIR, SKILLS_DIR]) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }
@@ -55,6 +80,9 @@ export function loadConfig(): GitMentorConfig {
   if (fs.existsSync(CONFIG_FILE)) {
     const raw = YAML.parse(fs.readFileSync(CONFIG_FILE, "utf8")) ?? {};
     config = GitMentorConfigSchema.parse(raw);
+    if (raw.llm?.modelConfigured === undefined) {
+      config.llm.modelConfigured = true;
+    }
   }
 
   if (process.env.GIT_MENTOR_GITHUB_TOKEN) {
@@ -79,4 +107,12 @@ export function loadConfig(): GitMentorConfig {
 export function saveConfig(config: GitMentorConfig): void {
   ensureDirs();
   fs.writeFileSync(CONFIG_FILE, YAML.stringify(config));
+}
+
+export function markModelConfigured(config: GitMentorConfig): void {
+  config.llm.modelConfigured = true;
+}
+
+export function needsModelOnboarding(config: GitMentorConfig): boolean {
+  return config.llm.provider === "ollama" && !config.llm.modelConfigured;
 }

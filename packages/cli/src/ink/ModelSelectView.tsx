@@ -3,7 +3,7 @@ import { Box, Text, useApp, useInput } from "ink";
 import SelectInput from "ink-select-input";
 import Spinner from "ink-spinner";
 import type { GitMentorConfig } from "@git-mentor/core";
-import { saveConfig } from "@git-mentor/core";
+import { markModelConfigured, saveConfig } from "@git-mentor/core";
 import {
   getOllamaAuthStatus,
   listOllamaModelCatalog,
@@ -31,9 +31,11 @@ interface ModelSelectViewProps {
   onDone: (result: ModelPickerResult) => void;
   /** When true (CLI `gitmentor model`), exit Ink after completion. */
   standalone?: boolean;
+  /** First-run onboarding — selection is required and persisted as default. */
+  firstRun?: boolean;
 }
 
-export function ModelSelectView({ config, onDone, standalone = false }: ModelSelectViewProps) {
+export function ModelSelectView({ config, onDone, standalone = false, firstRun = false }: ModelSelectViewProps) {
   const { exit } = useApp();
   const [phase, setPhase] = useState<"loading" | "pick" | "signin" | "preparing">("loading");
   const [items, setItems] = useState<ModelPickerItem[]>([]);
@@ -50,7 +52,7 @@ export function ModelSelectView({ config, onDone, standalone = false }: ModelSel
   };
 
   useInput((_input, key) => {
-    if (phase === "pick" && key.escape) {
+    if (phase === "pick" && key.escape && !firstRun) {
       finish({ changed: false, message: "Model selection cancelled." });
     }
   });
@@ -126,18 +128,22 @@ export function ModelSelectView({ config, onDone, standalone = false }: ModelSel
     }
 
     config.llm.model = selected;
+    markModelConfigured(config);
     saveConfig(config);
 
     setPhase("preparing");
     setSignInStatus(`Connecting ${selected}…`);
     const ready = await ensureOllamaModel(config.llm, setSignInStatus);
     config.llm.model = ready.model;
+    markModelConfigured(config);
     saveConfig(config);
 
     finish({
       changed: true,
       model: ready.model,
-      message: `Model set to ${modelLabel(config)}`,
+      message: firstRun
+        ? `Default model saved: ${modelLabel(config)}`
+        : `Model set to ${modelLabel(config)}`,
     });
   };
 
@@ -166,9 +172,15 @@ export function ModelSelectView({ config, onDone, standalone = false }: ModelSel
   return (
     <Box flexDirection="column">
       <Text bold color={colors.brand}>
-        Select LLM model
+        {firstRun ? "Welcome — choose your default model" : "Select LLM model"}
       </Text>
-      <Text color={colors.muted}>↑↓ navigate · Enter select · Esc cancel</Text>
+      {firstRun ? (
+        <Text color={colors.muted}>
+          This model will be used every time you run gitmentor. Change later with /model.
+        </Text>
+      ) : (
+        <Text color={colors.muted}>↑↓ navigate · Enter select · Esc cancel</Text>
+      )}
       <Box marginTop={1}>
         <SelectInput
           initialIndex={initialIndex}

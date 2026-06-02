@@ -80,6 +80,112 @@ export class GitHubClient {
     return data;
   }
 
+  async getProfileReadme(username: string): Promise<string | null> {
+    const key = `profile_readme_${username}`;
+    const cached = this.getCached<string | null>(key);
+    if (cached !== undefined) return cached;
+
+    try {
+      const { data } = await this.octokit.repos.getReadme({ owner: username, repo: username });
+      const content =
+        "content" in data && data.content
+          ? Buffer.from(data.content, "base64").toString("utf8").slice(0, 8_000)
+          : null;
+      this.setCache(key, content);
+      return content;
+    } catch {
+      this.setCache(key, null);
+      return null;
+    }
+  }
+
+  async getPinnedRepos(username: string): Promise<GitHubRepoData[]> {
+    const key = `pinned_${username}`;
+    const cached = this.getCached<GitHubRepoData[]>(key);
+    if (cached) return cached;
+
+    try {
+      const result = await this.octokit.graphql<{
+        user?: {
+          pinnedItems?: {
+            nodes?: Array<{
+              name?: string;
+              url?: string;
+              description?: string | null;
+              stargazerCount?: number;
+              primaryLanguage?: { name?: string | null } | null;
+              repositoryTopics?: { nodes?: Array<{ topic?: { name?: string } | null } | null> };
+            } | null>;
+          };
+        };
+      }>(
+        `query ($login: String!) {
+          user(login: $login) {
+            pinnedItems(first: 6, types: REPOSITORY) {
+              nodes {
+                ... on Repository {
+                  name
+                  url
+                  description
+                  stargazerCount
+                  primaryLanguage { name }
+                  repositoryTopics(first: 10) {
+                    nodes { topic { name } }
+                  }
+                }
+              }
+            }
+          }
+        }`,
+        { login: username },
+      );
+
+      const nodes = result.user?.pinnedItems?.nodes ?? [];
+      const repos: GitHubRepoData[] = nodes
+        .filter((node): node is NonNullable<typeof node> => Boolean(node?.name))
+        .map((node) => ({
+          name: node.name!,
+          html_url: node.url,
+          description: node.description,
+          language: node.primaryLanguage?.name ?? null,
+          stargazers_count: node.stargazerCount ?? 0,
+          topics:
+            node.repositoryTopics?.nodes
+              ?.map((entry) => entry?.topic?.name)
+              .filter((topic): topic is string => Boolean(topic)) ?? [],
+        }));
+
+      this.setCache(key, repos);
+      return repos;
+    } catch {
+      return [];
+    }
+  }
+
+  async getRecentPublicActivity(username: string, limit = 15) {
+    const key = `activity_${username}_${limit}`;
+    const cached = this.getCached<Array<{ type: string; repo: string; createdAt: string }>>(key);
+    if (cached) return cached;
+
+    try {
+      const { data } = await this.octokit.activity.listPublicEventsForUser({
+        username,
+        per_page: Math.min(limit, 30),
+      });
+
+      const events = data.slice(0, limit).map((event) => ({
+        type: event.type ?? "Event",
+        repo: event.repo?.name ?? "",
+        createdAt: event.created_at ?? new Date().toISOString(),
+      }));
+
+      this.setCache(key, events);
+      return events;
+    } catch {
+      return [];
+    }
+  }
+
   async getUserRepos(username: string, limit = 30): Promise<GitHubRepoData[]> {
     const key = `repos_${username}_${limit}`;
     const cached = this.getCached<GitHubRepoData[]>(key);
@@ -99,6 +205,8 @@ export class GitHubClient {
       stargazers_count: repo.stargazers_count ?? 0,
       topics: repo.topics ?? [],
       dependency_markers: [],
+      pushed_at: repo.pushed_at,
+      fork: repo.fork ?? false,
     }));
 
     this.setCache(key, repos);
@@ -187,6 +295,46 @@ export class GitHubClient {
       return [];
     }
   }
+
+  async forkRepository(owner: string, repo: string): Promise<{
+    fullName: string;
+    htmlUrl: string;
+    cloneUrl: string;
+    alreadyExisted: boolean;
+  }> {
+    try {
+      const { data } = await this.octokit.repos.createFork({ owner, repo });
+      return {
+        fullName: data.full_name ?? `${owner}/${repo}`,
+        htmlUrl: data.html_url ?? `https://github.com/${owner}/${repo}`,
+        cloneUrl: data.clone_url ?? `https://github.com/${owner}/${repo}.git`,
+        alreadyExisted: false,
+      };
+    } catch (error) {
+      const status = (error as { status?: number })?.status;
+      if (status !== 422) throw error;
+
+      const authUser = await this.getAuthenticatedLogin();
+      if (!authUser) throw error;
+
+      const { data } = await this.octokit.repos.get({ owner: authUser, repo });
+      return {
+        fullName: data.full_name ?? `${authUser}/${repo}`,
+        htmlUrl: data.html_url ?? `https://github.com/${authUser}/${repo}`,
+        cloneUrl: data.clone_url ?? `https://github.com/${authUser}/${repo}.git`,
+        alreadyExisted: true,
+      };
+    }
+  }
+
+  async getAuthenticatedLogin(): Promise<string | null> {
+    try {
+      const { data } = await this.octokit.users.getAuthenticated();
+      return data.login ?? null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 export interface SearchRepoResult {
@@ -204,19 +352,28 @@ export type IngestProgress = (message: string) => void;
 export class GitHubIngestor {
   constructor(private client: GitHubClient) {}
 
-  /** Public profile metadata only — no manifest / dependency scanning. */
+  /** Public profile presentation audit — bio, README, pins, stats, activity. No manifest scan. */
   async fetchProfileOnly(
     username: string,
     repoLimit = 30,
     onProgress?: IngestProgress,
   ): Promise<GitHubProfileData> {
-    onProgress?.(`Fetching @${username} profile…`);
+    onProgress?.(`Fetching @${username} GitHub profile…`);
     const user = await this.client.getUser(username);
 
-    onProgress?.(`Loading public repositories (up to ${repoLimit})…`);
+    onProgress?.(`Loading profile README, pins, and public stats…`);
+    const [profileReadme, pinnedRepos, recentActivity] = await Promise.all([
+      this.client.getProfileReadme(username),
+      this.client.getPinnedRepos(username),
+      this.client.getRecentPublicActivity(username, 15),
+    ]);
+
+    onProgress?.(`Indexing public repositories (up to ${repoLimit})…`);
     const repos = await this.client.getUserRepos(username, repoLimit);
 
-    onProgress?.(`Profile indexed — ${repos.length} repos (metadata only).`);
+    onProgress?.(
+      `Profile indexed — attractiveness signals ready (${repos.length} repos, ${pinnedRepos.length} pins).`,
+    );
 
     return {
       user: {
@@ -224,8 +381,19 @@ export class GitHubIngestor {
         name: user.name,
         bio: user.bio,
         public_repos: user.public_repos,
+        followers: user.followers,
+        following: user.following,
+        public_gists: user.public_gists,
+        company: user.company,
+        location: user.location,
+        blog: user.blog,
+        twitter_username: user.twitter_username,
+        created_at: user.created_at,
       },
       repos,
+      profileReadme,
+      pinnedRepos,
+      recentActivity,
     };
   }
 

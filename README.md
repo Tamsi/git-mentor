@@ -43,11 +43,15 @@ npm install -g .
 ### CLI chat
 
 ```bash
-gitmentor                    # your GitHub profile (needs gh auth or token)
+gitmentor                    # your GitHub profile (auto-loads with gh auth)
 gitmentor octocat            # public profile
 gitmentor me --role staff-engineer
 gitmentor chat octocat       # same as above (alias)
 ```
+
+With **`gh auth login`**, your profile loads **automatically** at startup. The coaching dossier is written to `~/.local/share/git-mentor/reports/<username>.md` (JSON alongside) and cached for `cacheTtlHours` (default 24h).
+
+`/analyze profile` refreshes **profile attractiveness** (bio, README, pins, stats, activity) — not manifest/code scans (`/analyze <repo>` for those).
 
 Example questions:
 - « What are my biggest gaps for Staff Engineer? »
@@ -105,7 +109,7 @@ gitmentor mcp    # MCP server for Cursor
 
 ## MCP (Cursor)
 
-Tools: `analyze_profile`, `compare_role`, `get_recommendations`, `discover_trending_repos`, `improve_profile`, `list_target_roles`
+**Built-in tools:** `analyze_profile`, `compare_role`, `get_recommendations`, `discover_trending_repos`, `improve_profile`, `analyze_repository`, `list_target_roles`, `list_rules`, `list_skills`, `get_agent_context`
 
 ```json
 {
@@ -117,6 +121,43 @@ Tools: `analyze_profile`, `compare_role`, `get_recommendations`, `discover_trend
   }
 }
 ```
+
+## Rules, skills & agent context
+
+git-mentor injects **rules** and **skills** into the LLM system prompt (Cursor-style `SKILL.md`).
+
+| Location | Purpose |
+|----------|---------|
+| `~/.config/git-mentor/rules/*.md` | Global coaching rules |
+| `~/.config/git-mentor/skills/<id>/SKILL.md` | Global skills |
+| `.git-mentor/rules/` · `.git-mentor/skills/` | Project-level overrides |
+
+```bash
+gitmentor init   # installs default GitHub-focused rules + skills
+```
+
+**Default rules:** `github-evidence-only`, `github-career-mission`, `github-signals`
+
+**Default skills:** `gap-coaching`, `github-profile-optimization`, `repo-deep-scan`, `growth-and-trending`, `interview-prep` (active by default: `gap-coaching`, `github-profile-optimization`)
+
+**Chat commands:** `/rules`, `/skills`, `/skills use repo-deep-scan`, `/mcp`
+
+**Config** (`~/.config/git-mentor/config.yaml`):
+
+With **`gh auth login`**, gitmentor **auto-enables the [GitHub MCP server](https://github.com/github/github-mcp-server)** for write actions (fork, issues, PRs). Career coaching stays in git-mentor MCP; GitHub operations delegate to GitHub MCP.
+
+```yaml
+mcp:
+  servers:
+    - name: github
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-github"]
+      enabled: true   # auto-enabled when gh auth is detected
+```
+
+Chat shortcuts: `/fork anomalyco/opencode` or `fork opencode` (after `/trending`) → calls MCP `fork_repository`.
+
+See `packages/cli/templates/agent/mcp/servers.example.json` for a starter external MCP config.
 
 ## Monorepo
 
