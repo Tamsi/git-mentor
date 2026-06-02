@@ -1,26 +1,20 @@
-# Python
+# Dependencies
+node_modules/
+dist/
+.pnpm-store/
+
+# Python (legacy)
+.venv/
 __pycache__/
 *.py[cod]
-*.egg-info/
-.eggs/
-dist/
-build/
-.venv/
-venv/
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.coverage
-htmlcov/
+.python-env/
 
 # git-mentor local data
 .git-mentor/
-*.db
 
 # IDE
 .idea/
 .vscode/
-*.swp
 .DS_Store
 
 # Secrets
@@ -28,6 +22,6 @@ htmlcov/
 .env.*
 !.env.example
 
-# HF Space cache
-space/.cache/
-space/__pycache__/
+# Build
+*.tsbuildinfo
+.turbo/

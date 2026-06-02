@@ -1,0 +1,41 @@
+{
+  "name": "git-mentor",
+  "version": "0.1.0",
+  "description": "Evidence-backed GitHub career intelligence — chat, CLI, MCP, local-first.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "gitmentor": "./packages/cli/dist/cli.js",
+    "git-mentor": "./packages/cli/dist/cli.js"
+  },
+  "files": [
+    "packages/cli/dist",
+    "scripts/postinstall.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "postinstall": "node scripts/postinstall.mjs",
+    "prepare": "node scripts/postinstall.mjs",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "@octokit/rest": "^21.1.1",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "ink": "^7.0.5",
+    "ink-select-input": "^6.2.0",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.2.7",
+    "yaml": "^2.7.0",
+    "zod": "^3.24.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "keywords": ["github", "ai", "agents", "mcp", "career", "cli", "ollama"]
+}

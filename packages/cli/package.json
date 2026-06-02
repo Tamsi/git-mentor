@@ -1,0 +1,61 @@
+{
+  "name": "git-mentor",
+  "version": "0.1.0",
+  "description": "Evidence-backed GitHub career intelligence — chat, CLI, MCP, local-first.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "gitmentor": "./dist/cli.js",
+    "git-mentor": "./dist/cli.js"
+  },
+  "main": "./dist/cli.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "prepublishOnly": "pnpm --filter git-mentor build",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "@octokit/rest": "^21.1.1",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "ink": "^7.0.5",
+    "ink-select-input": "^6.2.0",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.2.7",
+    "yaml": "^2.7.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@git-mentor/agents": "workspace:*",
+    "@git-mentor/chat": "workspace:*",
+    "@git-mentor/core": "workspace:*",
+    "@git-mentor/github": "workspace:*",
+    "@git-mentor/llm": "workspace:*",
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.2.16",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "github",
+    "ai",
+    "agents",
+    "mcp",
+    "career",
+    "cli",
+    "ollama"
+  ]
+}

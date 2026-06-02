@@ -1,162 +1,138 @@
 # git-mentor
 
-Evidence-backed GitHub career intelligence — **CLI**, **MCP**, and **Hugging Face Space**.
+Evidence-backed GitHub career intelligence — **TypeScript/Node**, **chat-first**, **CLI**, **MCP**, and **Hugging Face Space**.
 
-Analyze repositories, languages, dependencies, and activity to build a verifiable technical profile,
-compare against target roles (AI Engineer, Staff Engineer, …), and get actionable growth plans.
+## Install
 
-**Not a chatbot. Not a website.** Local-first agent pipeline with optional LLM polish.
+Requires **Node.js 20+**.
 
-[![Hugging Face Space](https://img.shields.io/badge/🤗-Try%20the%20Space-yellow)](https://huggingface.co/spaces/git-mentor/demo)
-
-## Why git-mentor?
-
-- **Evidence-backed** — skills link to repositories and dependency signals, not hallucinated scores
-- **Deterministic first** — Skill Signals Engine runs before any LLM
-- **LLM-agnostic** — Ollama local, OpenAI, OpenRouter, or fully deterministic mode
-- **MCP-native** — use from Cursor / Claude Desktop
-- **HF Space** — try on public `@username` without installing
-
-## Quick start
+### From npm (recommended)
 
 ```bash
-# Install
-pip install -e ".[dev]"
-
-# Configure (Ollama local by default)
-git-mentor init --provider ollama --model qwen3:8b
-
-# Auth (optional — uses gh CLI if available)
-git-mentor auth
-
-# Analyze your profile
-git-mentor analyze me
-
-# Public profile (no auth)
-git-mentor analyze torvalds --public --deterministic
-
-# Career coach
-git-mentor coach me --role staff-engineer
-
-# Export dossier
-git-mentor export me -o ./TECHNICAL_DOSSIER.md
+npm install -g git-mentor
 ```
 
-## MCP (Cursor / Claude Desktop)
+The CLI command is **`gitmentor`** (`git-mentor` remains available as an alias). Then configure Ollama:
 
 ```bash
-pip install "git-mentor[mcp]"
-git-mentor mcp
+gitmentor init --provider ollama --model qwen3:8b
+gitmentor doctor
 ```
 
-Add to your MCP config:
+### From source (development)
+
+```bash
+git clone <repo>
+cd git-mentor
+npm install -g .
+# postinstall runs pnpm install + build automatically
+```
+
+Or manually:
+
+```bash
+pnpm install
+pnpm build
+npm install -g .
+```
+
+> **Note:** Prefer `npm install -g .` from the repo root (not `./packages/cli`) so runtime dependencies resolve correctly.
+
+## Chat (primary interface)
+
+### CLI chat
+
+```bash
+gitmentor                    # your GitHub profile (needs gh auth or token)
+gitmentor octocat            # public profile
+gitmentor me --role staff-engineer
+gitmentor chat octocat       # same as above (alias)
+```
+
+Example questions:
+- « What are my biggest gaps for Staff Engineer? »
+- « What should I learn in the next 3 months? »
+- « Which OSS projects fit my stack? »
+
+Commands inside chat: `/analyze profile`, `/analyze <repo>`, `/role`, `/model`, `/gaps`, `/growth`, `/trending`, `/improve`, `/export`, `/help`, `/quit`
+
+### Stack
+
+- **Commander.js** — CLI structure (`init`, `chat`, `model`, `analyze`, …)
+- **Ink + React** — interactive chat, model picker, Ollama sign-in
+- **ink-text-input**, **ink-select-input**, **ink-spinner** — terminal UI primitives
+- **Chalk** — colors for one-shot commands (`doctor`, `analyze`, …)
+
+```bash
+gitmentor model              # interactive picker
+gitmentor model signin       # Ollama cloud login (opens browser)
+gitmentor model qwen3:8b     # set model directly
+gitmentor model --list       # plain text list
+```
+
+In chat: `/model` opens the picker · `/model signin` for Ollama cloud · `/model glm-5.1` to set directly
+
+Cloud models require Ollama sign-in (`/model signin` or `gitmentor model signin`).
+
+### Local app (browser)
+
+```bash
+gitmentor app
+# → http://localhost:3847
+```
+
+## Setup
+
+```bash
+gitmentor init --provider ollama --model qwen3:8b
+gitmentor auth
+gitmentor doctor
+```
+
+For natural conversation, use **Ollama** (local) or set `GIT_MENTOR_LLM_PROVIDER=openrouter`.
+
+Deterministic mode works for slash commands only: `gitmentor octocat --deterministic`
+
+## Other commands
+
+Legacy one-shot commands still available:
+
+```bash
+gitmentor analyze octocat --deterministic
+gitmentor eval
+gitmentor mcp    # MCP server for Cursor
+```
+
+## MCP (Cursor)
+
+Tools: `analyze_profile`, `compare_role`, `get_recommendations`, `discover_trending_repos`, `improve_profile`, `list_target_roles`
 
 ```json
 {
   "mcpServers": {
     "git-mentor": {
-      "command": "git-mentor",
+      "command": "gitmentor",
       "args": ["mcp"]
     }
   }
 }
 ```
 
-Tools: `analyze_profile`, `compare_role`, `get_recommendations`, `list_target_roles`
-
-## Hugging Face Space
-
-The `space/` directory deploys to Hugging Face as a Gradio demo:
-
-```bash
-# From repo root — push space/ to HF (or use HF Git integration)
-```
-
-Space features:
-- Analyze any **public** GitHub username
-- Target role selection
-- Agent trace tab (transparency)
-- Deterministic mode (no LLM required)
-
-## Architecture
+## Monorepo
 
 ```
-CLI / MCP / HF Space
-        ↓
-  Supervisor Pipeline
-        ↓
- GitHub Ingestor → Skill Signals Engine → Agents → LLM Router
-        ↓
-  Technical Dossier (Markdown / JSON)
+packages/core · github · llm · agents · chat · cli
+apps/space   — HF demo (Docker)
 ```
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for details.
-
-## LLM providers
-
-| Provider | Use case |
-|----------|----------|
-| `ollama` | Local (default) — MacBook + Qwen/Llama/Gemma |
-| `openai` | Remote OpenAI-compatible |
-| `openrouter` | Multi-model routing |
-| `deterministic` | No LLM — signals + rules only |
-
-Configure via `~/.config/git-mentor/config.yaml` or env vars:
-
-```bash
-export GIT_MENTOR_LLM_PROVIDER=ollama
-export GIT_MENTOR_LLM_MODEL=qwen3:8b
-export GIT_MENTOR_LLM_BASE_URL=http://localhost:11434
-export GIT_MENTOR_GITHUB_TOKEN=ghp_...
-```
-
-## Target roles
-
-- `ai-engineer`
-- `full-stack`
-- `staff-engineer`
-- `software-architect`
-- `oss-maintainer`
-
-```bash
-git-mentor roles
-```
-
-## Project structure
-
-```
-git-mentor/
-├── src/git_mentor/       # Core package (CLI, agents, MCP)
-├── space/                # Hugging Face Gradio demo
-├── eval/                 # Benchmark datasets (WIP)
-├── examples/             # Sample outputs
-└── tests/
-```
-
-## Evaluation
-
-```bash
-git-mentor eval
-git-mentor eval --json
-```
-
-Benchmarks skill detection on synthetic profiles. See [eval/README.md](./eval/README.md).
 
 ## Development
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev,space,mcp]"
-pytest
-git-mentor doctor
+pnpm install
+pnpm build
+pnpm test
+pnpm --filter git-mentor dev octocat --deterministic
 ```
-
-## Roadmap
-
-- [ ] Contribution Matcher (OSS issues by skill fit)
-- [ ] Eval harness + HF dataset
-- [ ] Profile diff over time
-- [ ] Tech Radar (filtered trending)
 
 ## License
 
