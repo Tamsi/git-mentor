@@ -25,7 +25,7 @@ export function Header(props: {
       <TipsBox>
         <Text>
           <Text color={colors.brand}>{"> "}</Text>
-          /model · /gaps · /growth · /improve · /help
+          /model · /gaps · /growth · /follow · /help
         </Text>
       </TipsBox>
     </Box>

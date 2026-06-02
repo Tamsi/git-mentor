@@ -1,14 +1,6 @@
 #!/usr/bin/env node
-import { AnalysisPipeline, CoachingService, formatProfileImprovementsMarkdown, formatRepoAnalysisMarkdown, formatTrendingReposMarkdown, parseRepoTarget } from "@git-mentor/agents";
-import {
-  formatAgentContextForPrompt,
-  formatRulesList,
-  formatSkillsList,
-  listRoles,
-  loadAgentContext,
-  loadConfig,
-  renderMarkdown,
-} from "@git-mentor/core";
+import { AnalysisPipeline, CoachingService, formatProfileImprovementsMarkdown, formatProfilesToFollowMarkdown, formatRepoAnalysisMarkdown, formatTrendingReposMarkdown, parseRepoTarget } from "@git-mentor/agents";
+import { formatAgentContextForPrompt, formatRulesList, formatSkillsList, getGithubProfileData, listRoles, loadAgentContext, loadConfig, renderMarkdown } from "@git-mentor/core";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -20,8 +12,7 @@ const coaching = new CoachingService(config);
 const server = new McpServer({ name: "git-mentor", version: "0.1.0" });
 
 function reposFromResult(result: Awaited<ReturnType<AnalysisPipeline["runProfile"]>>) {
-  const repos = (result.signals as { _repos?: import("@git-mentor/core").GitHubRepoData[] })._repos;
-  return repos ? { user: { login: result.profile.username }, repos } : undefined;
+  return getGithubProfileData(result);
 }
 
 server.tool(
@@ -103,6 +94,37 @@ server.tool(
         {
           type: "text",
           text: `# Profile improvements — @${result.profile.username}\n\n${formatProfileImprovementsMarkdown(items)}`,
+        },
+      ],
+    };
+  },
+);
+
+server.tool(
+  "discover_profiles_to_follow",
+  "List GitHub profiles to follow as role models for the target career path",
+  {
+    username: z.string(),
+    role: z.string().default("ai-engineer"),
+    limit: z.number().min(1).max(15).default(8),
+  },
+  async ({ username, role, limit }) => {
+    const result = await pipeline.runProfile({
+      username: username.replace(/^@/, ""),
+      roleId: role,
+      includeGrowth: false,
+    });
+    const trendingRepos = await coaching.discoverTrending(result.profile, result.gapAnalysis, 6);
+    const profiles = await coaching.discoverProfilesToFollow(result.profile, role, {
+      gapAnalysis: result.gapAnalysis,
+      trendingRepos,
+      limit,
+    });
+    return {
+      content: [
+        {
+          type: "text",
+          text: `# Profiles to follow — @${result.profile.username} (${role})\n\n${formatProfilesToFollowMarkdown(profiles)}`,
         },
       ],
     };

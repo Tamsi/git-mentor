@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { normalizeAnalysisResult } from "./analysis-normalize.js";
 import type { AnalysisResult } from "./schemas.js";
 import { REPORTS_DIR, ensureDirs } from "./config.js";
 import { formatAttractivenessMarkdown, type ProfileAttractiveness } from "./profile-attractiveness.js";
@@ -54,7 +55,7 @@ export function loadProfileDossier(
     const ageMs = Date.now() - new Date(record.savedAt).getTime();
     if (ageMs > ttlHours * 60 * 60 * 1000) return null;
 
-    return record.result;
+    return normalizeAnalysisResult(record.result);
   } catch {
     return null;
   }

@@ -101,17 +101,35 @@ export const ActionItemSchema = z.object({
 });
 export type ActionItem = z.infer<typeof ActionItemSchema>;
 
-export const TrendingRepoSchema = z.object({
-  fullName: z.string(),
+export const RelevanceBaseSchema = z.object({
   url: z.string().url(),
+  relevanceReason: z.string(),
+});
+
+export const TrendingRepoSchema = RelevanceBaseSchema.extend({
+  fullName: z.string(),
   description: z.string().optional(),
   stars: z.number(),
   language: z.string().optional(),
   topics: z.array(z.string()).default([]),
-  relevanceReason: z.string(),
   pushedAt: z.string().optional(),
 });
 export type TrendingRepo = z.infer<typeof TrendingRepoSchema>;
+
+export const ProfileToFollowSchema = RelevanceBaseSchema.extend({
+  username: z.string(),
+  name: z.string().optional(),
+  bio: z.string().optional(),
+  followers: z.number().optional(),
+  source: z.enum(["curated", "maintainer"]).default("curated"),
+});
+export type ProfileToFollow = z.infer<typeof ProfileToFollowSchema>;
+
+export const ActionPlanGithubSchema = z.object({
+  repos: z.array(TrendingRepoSchema).default([]),
+  profiles: z.array(ProfileToFollowSchema).default([]),
+});
+export type ActionPlanGithub = z.infer<typeof ActionPlanGithubSchema>;
 
 export const ProfileImprovementSchema = z.object({
   category: z.enum(["bio", "pinned", "readme", "oss", "activity", "portfolio", "skills"]),
@@ -122,15 +140,36 @@ export const ProfileImprovementSchema = z.object({
 });
 export type ProfileImprovement = z.infer<typeof ProfileImprovementSchema>;
 
-export const ActionPlanSchema = z.object({
-  generatedAt: z.string().datetime(),
-  recommendations: z.array(ActionItemSchema).default([]),
-  technologiesToLearn: z.array(z.string()).default([]),
-  reposToWatch: z.array(z.string()).default([]),
-  ossOpportunities: z.array(z.string()).default([]),
-  trendingRepos: z.array(TrendingRepoSchema).default([]),
-  profileImprovements: z.array(ProfileImprovementSchema).default([]),
+const LegacyActionPlanFieldsSchema = z.object({
+  reposToWatch: z.array(z.string()).optional(),
+  profilesToFollow: z.array(ProfileToFollowSchema).optional(),
+  trendingRepos: z.array(TrendingRepoSchema).optional(),
 });
+
+export const ActionPlanSchema = z
+  .object({
+    generatedAt: z.string().datetime(),
+    recommendations: z.array(ActionItemSchema).default([]),
+    technologiesToLearn: z.array(z.string()).default([]),
+    github: ActionPlanGithubSchema.default({ repos: [], profiles: [] }),
+    ossOpportunities: z.array(z.string()).default([]),
+    profileImprovements: z.array(ProfileImprovementSchema).default([]),
+  })
+  .merge(LegacyActionPlanFieldsSchema)
+  .transform((plan) => ({
+    generatedAt: plan.generatedAt,
+    recommendations: plan.recommendations,
+    technologiesToLearn: plan.technologiesToLearn,
+    github:
+      plan.github.repos.length > 0 || plan.github.profiles.length > 0
+        ? plan.github
+        : {
+            repos: plan.trendingRepos ?? plan.github.repos,
+            profiles: plan.profilesToFollow ?? plan.github.profiles,
+          },
+    ossOpportunities: plan.ossOpportunities,
+    profileImprovements: plan.profileImprovements,
+  }));
 export type ActionPlan = z.infer<typeof ActionPlanSchema>;
 
 export const AgentStepTraceSchema = z.object({
@@ -143,12 +182,54 @@ export const AgentStepTraceSchema = z.object({
 });
 export type AgentStepTrace = z.infer<typeof AgentStepTraceSchema>;
 
+export const GitHubRepoDataSchema = z.object({
+  name: z.string(),
+  html_url: z.string().optional(),
+  description: z.string().nullable().optional(),
+  language: z.string().nullable().optional(),
+  stargazers_count: z.number().optional(),
+  topics: z.array(z.string()).optional(),
+  dependency_markers: z.array(z.string()).optional(),
+  pushed_at: z.string().nullable().optional(),
+  fork: z.boolean().optional(),
+});
+
+export const GitHubUserDataSchema = z.object({
+  login: z.string(),
+  name: z.string().nullable().optional(),
+  bio: z.string().nullable().optional(),
+  public_repos: z.number().optional(),
+  followers: z.number().optional(),
+  following: z.number().optional(),
+  public_gists: z.number().optional(),
+  company: z.string().nullable().optional(),
+  location: z.string().nullable().optional(),
+  blog: z.string().nullable().optional(),
+  twitter_username: z.string().nullable().optional(),
+  created_at: z.string().optional(),
+});
+
+export const GitHubActivityEventSchema = z.object({
+  type: z.string(),
+  repo: z.string(),
+  createdAt: z.string(),
+});
+
+export const GitHubProfileDataSchema = z.object({
+  user: GitHubUserDataSchema,
+  repos: z.array(GitHubRepoDataSchema),
+  profileReadme: z.string().nullable().optional(),
+  pinnedRepos: z.array(GitHubRepoDataSchema).optional(),
+  recentActivity: z.array(GitHubActivityEventSchema).optional(),
+});
+
 export const AnalysisResultSchema = z.object({
   profile: DeveloperProfileSchema,
   gapAnalysis: GapAnalysisSchema.optional(),
   actionPlan: ActionPlanSchema.optional(),
   traces: z.array(AgentStepTraceSchema).default([]),
   signals: z.record(z.unknown()).default({}),
+  githubData: GitHubProfileDataSchema.optional(),
 });
 export type AnalysisResult = z.infer<typeof AnalysisResultSchema>;
 

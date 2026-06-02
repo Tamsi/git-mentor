@@ -68,12 +68,20 @@ export function renderMarkdown(result: AnalysisResult, includeEvidence = true): 
       lines.push(`- **${rec.title}** [${rec.effort}] — ${rec.description}`);
     }
     lines.push("", "### Technologies to Learn", ...plan.technologiesToLearn.map((t) => `- ${t}`));
-    lines.push("", "### Repositories to Watch", ...plan.reposToWatch.map((r) => `- \`${r}\``));
-    if (plan.trendingRepos.length) {
+    const repos = plan.github.repos;
+    if (repos.length) {
       lines.push("", "### Trending Repos (domain match)");
-      for (const repo of plan.trendingRepos) {
+      for (const repo of repos) {
         lines.push(`- **${repo.fullName}** (${repo.stars}★) — ${repo.relevanceReason}`);
         lines.push(`  ${repo.url}`);
+      }
+      lines.push("", "### Repositories to Watch", ...repos.map((r) => `- \`${r.fullName}\``));
+    }
+    if (plan.github.profiles.length) {
+      lines.push("", "### Profiles to Follow");
+      for (const entry of plan.github.profiles) {
+        lines.push(`- **@${entry.username}** — ${entry.relevanceReason}`);
+        lines.push(`  ${entry.url}`);
       }
     }
     if (plan.profileImprovements.length) {

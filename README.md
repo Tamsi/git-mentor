@@ -58,7 +58,7 @@ Example questions:
 - « What should I learn in the next 3 months? »
 - « Which OSS projects fit my stack? »
 
-Commands inside chat: `/analyze profile`, `/analyze <repo>`, `/role`, `/model`, `/gaps`, `/growth`, `/trending`, `/improve`, `/export`, `/help`, `/quit`
+Commands inside chat: `/analyze profile`, `/analyze <repo>`, `/role`, `/model`, `/gaps`, `/growth`, `/trending`, `/follow`, `/improve`, `/export`, `/help`, `/quit`
 
 ### Stack
 
@@ -109,7 +109,7 @@ gitmentor mcp    # MCP server for Cursor
 
 ## MCP (Cursor)
 
-**Built-in tools:** `analyze_profile`, `compare_role`, `get_recommendations`, `discover_trending_repos`, `improve_profile`, `analyze_repository`, `list_target_roles`, `list_rules`, `list_skills`, `get_agent_context`
+**Built-in tools:** `analyze_profile`, `compare_role`, `get_recommendations`, `discover_trending_repos`, `discover_profiles_to_follow`, `improve_profile`, `analyze_repository`, `list_target_roles`, `list_rules`, `list_skills`, `get_agent_context`
 
 ```json
 {

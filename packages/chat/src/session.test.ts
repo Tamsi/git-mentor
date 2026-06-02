@@ -79,9 +79,8 @@ describe("ChatSession", () => {
           generatedAt: new Date().toISOString(),
           recommendations: [],
           technologiesToLearn: [],
-          reposToWatch: [],
+          github: { repos: [], profiles: [] },
           ossOpportunities: [],
-          trendingRepos: [],
           profileImprovements: [],
         },
         traces: [],
@@ -120,6 +119,73 @@ describe("ChatSession", () => {
     await session.bootstrap();
     const reply = await session.handleInput("/trending");
     expect(reply.content).toContain("gh auth login");
+  });
+
+  it("prompts for profile before /follow", async () => {
+    const config = GitMentorConfigSchema.parse({ llm: { provider: "deterministic" } });
+    const session = new ChatSession(config, "fresh-user", "ai-engineer");
+    await session.bootstrap();
+    const reply = await session.handleInput("/follow");
+    expect(reply.content).toContain("gh auth login");
+  });
+
+  it("lists cached profiles to follow from dossier", async () => {
+    const config = GitMentorConfigSchema.parse({ llm: { provider: "deterministic" } });
+    saveProfileDossier(
+      {
+        profile: {
+          username: "octocat",
+          analyzedAt: new Date().toISOString(),
+          summary: "Cached profile",
+          primaryStack: ["TypeScript"],
+          skills: [],
+          domains: [],
+          strengths: [],
+          weaknesses: [],
+          maturityScore: 6,
+          repoCount: 4,
+          publicRepos: 4,
+          totalStars: 12,
+          metadata: {},
+        },
+        gapAnalysis: {
+          targetRole: "AI Engineer",
+          fitScore: 7,
+          summary: "Good fit",
+          gaps: [],
+          learningPlan: [],
+          strengthsForRole: ["TypeScript"],
+        },
+        actionPlan: {
+          generatedAt: new Date().toISOString(),
+          recommendations: [],
+          technologiesToLearn: [],
+          github: {
+            repos: [],
+            profiles: [
+              {
+                username: "simonw",
+                url: "https://github.com/simonw",
+                name: "Simon Willison",
+                followers: 30000,
+                relevanceReason: "Practical LLM tooling",
+                source: "curated",
+              },
+            ],
+          },
+          ossOpportunities: [],
+          profileImprovements: [],
+        },
+        traces: [],
+        signals: {},
+      },
+      "ai-engineer",
+    );
+    const session = new ChatSession(config, "octocat", "ai-engineer");
+    await session.bootstrap();
+    const reply = await session.handleInput("/follow");
+    expect(reply.content).toContain("simonw");
+    expect(reply.content).toContain("Practical LLM tooling");
   });
 
   it("model command shows current config", async () => {
@@ -171,9 +237,8 @@ describe("ChatSession", () => {
           generatedAt: new Date().toISOString(),
           recommendations: [{ title: "Ship an ML demo", category: "learning", description: "Build public evidence", effort: "M", rationale: "Gap" }],
           technologiesToLearn: ["LangGraph"],
-          reposToWatch: [],
+          github: { repos: [], profiles: [] },
           ossOpportunities: [],
-          trendingRepos: [],
           profileImprovements: [],
         },
         traces: [],

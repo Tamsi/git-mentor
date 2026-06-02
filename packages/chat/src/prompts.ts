@@ -45,7 +45,7 @@ function formatGrowthPlan(result: AnalysisResult): string {
     .map((r) => `- [${r.effort}] ${r.title}: ${r.description}`)
     .join("\n");
   const tech = plan.technologiesToLearn.slice(0, 5).join(", ");
-  const trending = plan.trendingRepos
+  const trending = plan.github.repos
     .slice(0, 5)
     .map((r) => `- ${r.fullName} (${r.stars}★): ${r.relevanceReason}`)
     .join("\n");
@@ -218,7 +218,7 @@ export function buildWelcomeMessage(username: string, roleId: string): string {
     "Connect GitHub with `gh auth login`, then restart — your profile loads automatically.",
     "Or run **`/analyze profile`** to refresh your attractiveness audit (bio, README, pins, stats, activity).",
     "",
-    "Commands: `/gaps`, `/growth`, `/trending`, `/improve`, `/help`.",
+    "Commands: `/gaps`, `/growth`, `/trending`, `/follow`, `/improve`, `/help`.",
   ].join("\n");
 }
 
@@ -241,7 +241,7 @@ export function buildProfileReadyMessage(
     "",
     options?.opening?.trim() ?? buildDeterministicOpening(analysis, roleId),
     "",
-    "Try `/gaps`, `/growth`, `/improve`, `/trending`, or ask anything about your GitHub profile.",
+    "Try `/gaps`, `/growth`, `/improve`, `/trending`, `/follow`, or ask anything about your GitHub profile.",
     "Run **`/analyze profile`** to refresh after you update bio, pins, or README.",
   ];
   return lines.filter((line) => line !== "").join("\n");
@@ -252,7 +252,7 @@ export const WELCOME_MESSAGE = [
   "Your GitHub profile loads automatically when `gh` is connected.",
   "Refresh with /analyze profile · deep-scan a repo with /analyze <repo>.",
   "",
-  "Commands: /analyze profile · /analyze <repo> · /role · /model · /rules · /skills · /mcp · /gaps · /growth · /trending · /improve · /export · /help · /quit",
+  "Commands: /analyze profile · /analyze <repo> · /role · /model · /rules · /skills · /mcp · /gaps · /growth · /trending · /follow · /improve · /export · /help · /quit",
 ].join("\n");
 
 export const NEED_ANALYSIS_MESSAGE =

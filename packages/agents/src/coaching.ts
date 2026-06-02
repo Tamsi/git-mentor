@@ -5,20 +5,26 @@ import type {
   GitHubProfileData,
   GitMentorConfig,
   ProfileImprovement,
+  ProfileToFollow,
   TrendingRepo,
 } from "@git-mentor/core";
-import { GitHubClient, GitHubRepoDiscovery } from "@git-mentor/github";
+import { GitHubClient, GitHubProfileDiscovery, GitHubRepoDiscovery } from "@git-mentor/github";
 import {
   buildProfileImprovements,
   formatProfileImprovementsMarkdown,
   formatTrendingReposMarkdown,
 } from "./profile-improvement.js";
 
+export { formatProfilesToFollowMarkdown } from "@git-mentor/github";
+
 export class CoachingService {
   private discovery: GitHubRepoDiscovery;
+  private profileDiscovery: GitHubProfileDiscovery;
 
   constructor(config: GitMentorConfig) {
-    this.discovery = new GitHubRepoDiscovery(new GitHubClient(config));
+    const client = new GitHubClient(config);
+    this.discovery = new GitHubRepoDiscovery(client);
+    this.profileDiscovery = new GitHubProfileDiscovery(client);
   }
 
   async discoverTrending(
@@ -27,6 +33,18 @@ export class CoachingService {
     limit = 8,
   ): Promise<TrendingRepo[]> {
     return this.discovery.discoverTrending(profile, gapAnalysis, limit);
+  }
+
+  async discoverProfilesToFollow(
+    profile: DeveloperProfile,
+    roleId: string,
+    options?: {
+      gapAnalysis?: GapAnalysis;
+      trendingRepos?: TrendingRepo[];
+      limit?: number;
+    },
+  ): Promise<ProfileToFollow[]> {
+    return this.profileDiscovery.discoverProfilesToFollow(profile, roleId, options);
   }
 
   buildProfileImprovements(
@@ -54,12 +72,11 @@ export class CoachingService {
       ...result,
       actionPlan: {
         ...result.actionPlan,
-        trendingRepos,
+        github: {
+          repos: trendingRepos,
+          profiles: result.actionPlan.github.profiles,
+        },
         profileImprovements,
-        reposToWatch: [
-          ...trendingRepos.map((r) => r.fullName),
-          ...result.actionPlan.reposToWatch,
-        ].slice(0, 8),
       },
     };
   }

@@ -30,7 +30,7 @@ function isModelSignInCommand(line: string): boolean {
 }
 
 function needsProgress(line: string): boolean {
-  if (line.startsWith("/trending")) return true;
+  if (line.startsWith("/trending") || line.startsWith("/follow")) return true;
   if (!line.startsWith("/analyze")) return false;
   const parts = line.slice(1).trim().split(/\s+/);
   if (parts[0]?.toLowerCase() !== "analyze") return false;

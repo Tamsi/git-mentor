@@ -10,4 +10,10 @@ export {
   resolveGitHubTokenForMcp,
 } from "./mcp-setup.js";
 export { GitHubRepoDiscovery, buildDiscoveryQueries } from "./discovery.js";
+export {
+  GitHubProfileDiscovery,
+  ROLE_PROFILE_HINTS,
+  buildProfileFollowCandidates,
+  formatProfilesToFollowMarkdown,
+} from "./profile-discovery.js";
 export { resolveForkTarget, formatForkResult } from "./fork.js";

@@ -163,11 +163,6 @@ export class CareerCoachAgent {
   }
 }
 
-const ROLE_REPOS: Record<string, string[]> = {
-  "ai-engineer": ["langchain-ai/langgraph", "ollama/ollama", "huggingface/transformers"],
-  "staff-engineer": ["kubernetes/kubernetes", "grpc/grpc", "prometheus/prometheus"],
-  "oss-maintainer": ["firstcontributions/first-contributions", "up-for-grabs/up-for-grabs.net"],
-};
 
 export class GrowthAdvisorAgent {
   constructor(private discovery?: GitHubRepoDiscovery) {}
@@ -228,20 +223,21 @@ export class GrowthAdvisorAgent {
     }
 
     const profileImprovements = buildProfileImprovements(profile, gapAnalysis, githubData);
-    const fallbackRepos = ROLE_REPOS[roleId] ?? ["github/explore", "sindresorhus/awesome"];
 
     return [
       {
         generatedAt: new Date().toISOString(),
         recommendations: recommendations.slice(0, topN),
         technologiesToLearn,
-        reposToWatch: [...trendingRepos.map((r) => r.fullName), ...fallbackRepos].slice(0, 8),
+        github: {
+          repos: trendingRepos,
+          profiles: [],
+        },
         ossOpportunities: [
           "Find a repo in your primary stack with `good first issue` labels",
           "Review one PR per week in a project you depend on",
           "Fork a trending repo from `/trending` and submit a documentation fix",
         ],
-        trendingRepos,
         profileImprovements,
       },
       trace(
@@ -349,6 +345,6 @@ export class AnalysisPipeline {
       traces.push(growthTrace);
     }
 
-    return { profile, gapAnalysis, actionPlan, traces, signals: { ...signals, _repos: githubData.repos } };
+    return { profile, gapAnalysis, actionPlan, traces, signals, githubData };
   }
 }

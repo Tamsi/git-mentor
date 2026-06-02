@@ -8,6 +8,7 @@ export const GITMENTOR_BUILTIN_MCP_TOOLS = [
   "compare_role",
   "get_recommendations",
   "discover_trending_repos",
+  "discover_profiles_to_follow",
   "improve_profile",
   "analyze_repository",
   "analyze_repository_for_user",

@@ -1,4 +1,5 @@
 export * from "./schemas.js";
+export * from "./analysis-normalize.js";
 export * from "./config.js";
 export * from "./roles.js";
 export * from "./signals.js";
