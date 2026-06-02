@@ -1,0 +1,101 @@
+[
+  {
+    "id": "backend-python-ai",
+    "github_data": {
+      "user": {
+        "login": "synthetic-backend-ai",
+        "name": "Synthetic Backend AI",
+        "bio": "Building AI backends",
+        "public_repos": 4
+      },
+      "repos": [
+        {
+          "name": "rag-service",
+          "html_url": "https://github.com/synthetic-backend-ai/rag-service",
+          "description": "RAG API with FastAPI",
+          "language": "Python",
+          "stargazers_count": 20,
+          "topics": ["rag", "llm", "api"],
+          "dependency_markers": ["\"fastapi\"", "\"langgraph\"", "\"transformers\""]
+        },
+        {
+          "name": "agent-orchestrator",
+          "html_url": "https://github.com/synthetic-backend-ai/agent-orchestrator",
+          "description": "Multi-agent orchestration",
+          "language": "Python",
+          "stargazers_count": 8,
+          "topics": ["agents", "mcp"],
+          "dependency_markers": ["\"langgraph\"", "\"mcp\""]
+        }
+      ]
+    },
+    "ground_truth": {
+      "must_detect_skills": ["Python", "FastAPI", "LangGraph", "Transformers"],
+      "must_detect_domains": ["AI Engineering", "Backend Architecture"],
+      "min_maturity": 3.0
+    }
+  },
+  {
+    "id": "php-symfony",
+    "github_data": {
+      "user": {
+        "login": "synthetic-symfony",
+        "name": "Synthetic Symfony Dev",
+        "bio": "PHP backend developer",
+        "public_repos": 3
+      },
+      "repos": [
+        {
+          "name": "symfony-api",
+          "html_url": "https://github.com/synthetic-symfony/symfony-api",
+          "description": "REST API on Symfony",
+          "language": "PHP",
+          "stargazers_count": 15,
+          "topics": ["symfony", "api", "backend"],
+          "dependency_markers": ["\"symfony/framework-bundle\"", "\"symfony/serializer\""]
+        },
+        {
+          "name": "legacy-bridge",
+          "html_url": "https://github.com/synthetic-symfony/legacy-bridge",
+          "description": "Migration layer",
+          "language": "PHP",
+          "stargazers_count": 3,
+          "topics": ["php"],
+          "dependency_markers": ["\"symfony/console\""]
+        }
+      ]
+    },
+    "ground_truth": {
+      "must_detect_skills": ["PHP", "Symfony"],
+      "must_detect_domains": ["Backend Architecture", "API Design"],
+      "min_maturity": 2.5
+    }
+  },
+  {
+    "id": "frontend-react",
+    "github_data": {
+      "user": {
+        "login": "synthetic-frontend",
+        "name": "Synthetic Frontend Dev",
+        "bio": "React engineer",
+        "public_repos": 2
+      },
+      "repos": [
+        {
+          "name": "dashboard-ui",
+          "html_url": "https://github.com/synthetic-frontend/dashboard-ui",
+          "description": "React dashboard",
+          "language": "TypeScript",
+          "stargazers_count": 10,
+          "topics": ["react", "frontend"],
+          "dependency_markers": ["\"react\"", "\"react-dom\"", "\"next\""]
+        }
+      ]
+    },
+    "ground_truth": {
+      "must_detect_skills": ["TypeScript", "React", "Next.js"],
+      "must_detect_domains": ["Frontend"],
+      "min_maturity": 2.5
+    }
+  }
+]
