@@ -50,17 +50,14 @@ export {
   listRepositoryBranches,
   listStarredRepositories,
 } from "./github-read.js";
-export { searchRepositories, searchCode, searchDiscussions } from "./github-search.js";
+export { searchRepositories, searchCode } from "./github-search.js";
 export {
   listDiscussions,
   getDiscussion,
   listDiscussionComments,
   createDiscussion,
   createDiscussionComment,
-  listMyDiscussions,
   formatDiscussionsListMarkdown,
-  formatMyDiscussionsMarkdown,
-  parseRepoFromDiscussionSearchQuery,
 } from "./discussions.js";
 export {
   buildGithubMcpServerEntry,

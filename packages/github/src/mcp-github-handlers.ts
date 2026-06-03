@@ -5,7 +5,6 @@ import {
   getDiscussion,
   listDiscussionComments,
   listDiscussions,
-  listMyDiscussions,
 } from "./discussions.js";
 import { listFollowers } from "./followers.js";
 import { listFollowing } from "./following.js";
@@ -18,7 +17,7 @@ import {
   listStarredRepositories,
   listUserRepositories,
 } from "./github-read.js";
-import { searchCode, searchDiscussions, searchRepositories } from "./github-search.js";
+import { searchCode, searchRepositories } from "./github-search.js";
 import { GitHubRestClient } from "./github-rest.js";
 import {
   GitHubWriteClient,
@@ -150,11 +149,6 @@ export async function callGitHubMcpTool(
       return searchCode(rest, p.query, { perPage: p.per_page });
     }
 
-    case "search_discussions": {
-      const p = z.object({ query: z.string(), per_page: z.number().int().optional() }).parse(args);
-      return searchDiscussions(rest, p.query, { perPage: p.per_page });
-    }
-
     case "list_discussions": {
       const p = z
         .object({
@@ -218,21 +212,6 @@ export async function callGitHubMcpTool(
         })
         .parse(args);
       return createDiscussionComment(rest, p.owner, p.repo, p.discussion_number, p.body);
-    }
-
-    case "list_my_discussions": {
-      const p = z
-        .object({
-          username: z.string().optional(),
-          max_repos: z.number().int().optional(),
-          per_repo: z.number().int().optional(),
-        })
-        .parse(args);
-      return listMyDiscussions(rest, {
-        username: p.username,
-        maxRepos: p.max_repos,
-        perRepo: p.per_repo,
-      });
     }
 
     case "fork_repository": {

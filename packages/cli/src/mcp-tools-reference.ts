@@ -140,7 +140,7 @@ function renderSlashCommands(): string {
     "- `/follow apply user1 user2` — follow explicit usernames",
     "- `/trending` — trending repos for your stack",
     "- `/followers` · `/following` — live social lists",
-    "- `/discussions` · `/discussions owner/repo` · `/discussions community`",
+    "- `/discussions community` · `/discussions owner/repo`",
     "- `/discuss create` · `/discuss reply` — forum posts (confirm with user)",
     "- `/fork owner/repo` — MCP `fork_repository`",
     "",

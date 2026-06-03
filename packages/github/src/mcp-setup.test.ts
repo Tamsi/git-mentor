@@ -13,7 +13,7 @@ describe("GitHub MCP tool lists", () => {
   it("ships read, social, search, discussions, and profile write tools", () => {
     expect(GITHUB_MCP_SHIPPED_TOOLS).toContain("list_followers");
     expect(GITHUB_MCP_SHIPPED_TOOLS).toContain("list_following");
-    expect(GITHUB_MCP_SHIPPED_TOOLS).toContain("search_discussions");
+    expect(GITHUB_MCP_SHIPPED_TOOLS).toContain("list_discussions");
     expect(GITHUB_MCP_SHIPPED_TOOLS).toContain("create_discussion");
     expect(GITHUB_MCP_SHIPPED_TOOLS).toContain("fork_repository");
     expect(GITHUB_MCP_PLANNED_TOOLS).toHaveLength(0);

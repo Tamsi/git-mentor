@@ -9,7 +9,7 @@ Evidence-backed GitHub career intelligence. This document sequences work from th
 | CLI + Ink chat | `packages/cli` | Primary UX; slash commands, model picker, GitHub auth |
 | Chat engine | `packages/chat` | Sessions, prompts, GitHub MCP wiring |
 | Agents / analysis | `packages/agents` | Profile, repo scans, coaching pipeline |
-| GitHub + MCP | `packages/github` | ~26 tools: profile, repos, search, social graph, discussions, writes |
+| GitHub + MCP | `packages/github` | ~24 tools: profile, repos, search, social graph, discussions (repo + community), writes |
 | LLM | `packages/llm` | Ollama, OpenRouter, model config |
 | Core config | `packages/core` | `~/.config/git-mentor`, rules, skills |
 | npm global | root `package.json` | `gitmentor` / `git-mentor` binaries |
@@ -58,7 +58,7 @@ All surfaces share config, cache (`~/.local/share/git-mentor/reports/`), rules/s
 | Layer | Capability |
 |-------|------------|
 | `packages/github` | REST + GraphQL: profile, repos, commits/branches, following/followers, search, discussions |
-| MCP `github` | ~26 tools (see `GITHUB_MCP_SHIPPED_TOOLS` in `mcp-github-tool-definitions.ts`) |
+| MCP `github` | ~24 tools (see `GITHUB_MCP_SHIPPED_TOOLS` in `mcp-github-tool-definitions.ts`) |
 | Writes | `update_user_profile`, `upsert_repository_file`, `update_repository_metadata`, `pin_repositories`, `fork_repository`, `follow_user`, `unfollow_user`, `create_repository` |
 | Chat | `/apply bio|readme|pin`, `/followers`, `/following`, `/discussions`, `/discuss create|reply`, `/fork` |
 | LLM | Ollama tool loop exposes `github` MCP tools (`mcp-llm-tools.ts`) |
@@ -100,7 +100,7 @@ Prefer **REST** ([Discussions API](https://docs.github.com/en/rest/using-the-res
 
 **Tasks:**
 
-- [x] `packages/github/src/discussions.ts` — GraphQL client + `search_discussions`  
+- [x] `packages/github/src/discussions.ts` — GraphQL list/get/comments + create  
 - [ ] Map repos from coaching context → repos with Discussions enabled (auto-skip disabled repos)  
 - [ ] Handle repos without Discussions (skip + user-visible hint to enable in repo Settings)  
 
@@ -110,12 +110,12 @@ Prefer **REST** ([Discussions API](https://docs.github.com/en/rest/using-the-res
 |------|--------|
 | `list_discussions`, `get_discussion`, `list_discussion_comments` | Shipped |
 | `create_discussion`, `create_discussion_comment` | Shipped |
-| `list_my_discussions`, `search_discussions` | Shipped |
+| Repo + `community/community` only (no global search / no owned-repo aggregation) | Shipped |
 | `update_discussion_comment` | Optional MVP+ |
 
 ### 2.3 Chat & coaching
 
-- [x] Slash: `/discussions`, `/discussions <owner/repo>`, `/discussions community`, `/discuss create`, `/discuss reply`  
+- [x] Slash: `/discussions community`, `/discussions <owner/repo>`, `/discuss create`, `/discuss reply`  
 - [ ] Inject **DISCUSSIONS CONTEXT** into system prompt: open threads, unanswered questions, last activity dates (evidence-only)  
 - [ ] Skill `github-discussions-engagement` — when to reply, when to open a new thread, tone for maintainers  
 - [ ] Rule snippet: never claim a discussion exists without `list_discussions` / `get_discussion` in context  
@@ -213,7 +213,7 @@ packages/
 
 ## Open decisions
 
-1. **Discussions aggregation:** cap repos scanned per `/discussions` (e.g. top 10 pinned) to respect rate limits.  
+1. **Discussions scope:** only `community/community` and explicit `owner/repo` (no cross-repo aggregation).  
 2. **Human-in-the-loop:** require explicit confirmation before every `create_discussion` / `create_discussion_comment` (default on).  
 
 ---

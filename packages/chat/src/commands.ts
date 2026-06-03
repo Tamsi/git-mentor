@@ -24,7 +24,12 @@ import {
   listExternalMcpTools,
 } from "./mcp-client.js";
 import { formatToolResult, NEED_ANALYSIS_MESSAGE } from "./prompts.js";
-import { formatCommandError, isProfileAnalyzeTarget, stripAtUsername } from "./command-utils.js";
+import {
+  formatCommandError,
+  isProfileAnalyzeTarget,
+  parseDiscussCreateInput,
+  stripAtUsername,
+} from "./command-utils.js";
 import { runFollowProfilesOnGitHub, stripGitHubUsername } from "./github-follow.js";
 import {
   formatFollowersMcpMarkdown,
@@ -32,7 +37,6 @@ import {
   listDiscussionsRepoMarkdown,
   listFollowersViaGitHubMcp,
   listFollowingViaGitHubMcp,
-  listMyDiscussionsMarkdown,
 } from "./github-mcp.js";
 import { handleGitHubAuthCommand } from "./github-auth.js";
 import { formatGithubToolResult, invokeGithubTool } from "./github-tool-bridge.js";
@@ -207,11 +211,10 @@ const handlers: Record<string, CommandHandler> = {
     if (!joined || joined === "help") {
       return {
         content: [
-          "**Discussions**",
-          "- `/discussions` — recent threads on your owned repos",
-          "- `/discussions owner/repo` — list threads in one repo",
-          "- `/discussions community` — latest threads on [community/community](https://github.com/orgs/community/discussions)",
-          "- `/discuss create owner/repo Title | Body` — new thread (confirm intent)",
+          "**Discussions** (repo or GitHub Community only)",
+          "- `/discussions community` — [community/community](https://github.com/orgs/community/discussions)",
+          "- `/discussions owner/repo` — threads in that repository",
+          "- `/discuss create owner/repo Title | Body` — new thread",
           "- `/discuss reply owner/repo NUMBER | comment` — reply on thread #NUMBER",
         ].join("\n"),
         toolUsed: "discussions",
@@ -228,12 +231,10 @@ const handlers: Record<string, CommandHandler> = {
     }
 
     if (!joined.includes("/")) {
-      try {
-        const body = await listMyDiscussionsMarkdown(ctx.config, ctx.getUsername());
-        return { content: formatToolResult("Your discussions", body), toolUsed: "discussions" };
-      } catch (error) {
-        return { content: formatCommandError(error), toolUsed: "discussions" };
-      }
+      return {
+        content: "Use `/discussions community` or `/discussions owner/repo`. See `/discussions help`.",
+        toolUsed: "discussions",
+      };
     }
 
     const [owner, repo] = joined.split("/");
@@ -251,25 +252,20 @@ const handlers: Record<string, CommandHandler> = {
   discuss: async (ctx, args) => {
     const sub = args[0]?.toLowerCase();
     if (sub === "create") {
-      const rest = args.slice(1).join(" ");
-      const pipe = rest.indexOf("|");
-      const repoPart = pipe >= 0 ? rest.slice(0, pipe).trim() : rest;
-      const bodyPart = pipe >= 0 ? rest.slice(pipe + 1).trim() : "";
-      const [owner, repo, ...titleParts] = repoPart.split(/\s+/);
-      const title = titleParts.join(" ");
-      if (!owner || !repo || !title || !bodyPart) {
+      const parsed = parseDiscussCreateInput(args.slice(1).join(" "));
+      if (!parsed) {
         return {
-          content: "Usage: `/discuss create owner/repo Title here | Body markdown`",
+          content: "Usage: `/discuss create owner/repo Title with spaces | Body markdown`",
           toolUsed: "discuss",
         };
       }
       try {
         const raw = formatGithubToolResult(
           await invokeGithubTool(ctx.config, "create_discussion", {
-            owner,
-            repo,
-            title,
-            body: bodyPart,
+            owner: parsed.owner,
+            repo: parsed.repo,
+            title: parsed.title,
+            body: parsed.body,
           }),
         );
         return { content: formatToolResult("Discussion created", raw), toolUsed: "discuss" };
@@ -619,7 +615,7 @@ const handlers: Record<string, CommandHandler> = {
       "- /trending — discover trending repos",
       "- /following — accounts you follow · /followers — your followers",
       "- /follow — role models · /follow apply — follow on GitHub",
-      "- /discussions — forum threads · /discuss create|reply",
+      "- /discussions community|owner/repo · /discuss create|reply",
       "- /fork <repo> — fork via GitHub MCP",
       "- /apply — write to your GitHub (bio, README, pins) — `/apply help`",
       "- /improve — GitHub profile improvement plan",

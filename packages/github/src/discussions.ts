@@ -1,6 +1,4 @@
 import type { GitHubRestClient } from "./github-rest.js";
-import { GITHUB_API } from "./github-rest.js";
-import { listUserRepositories } from "./github-read.js";
 
 export interface DiscussionSummary {
   number: number;
@@ -222,17 +220,17 @@ export async function createDiscussion(
   }
 
   const result = await rest.graphql<{
-    addDiscussion: { discussion: { number: number; title: string; url: string } };
+    createDiscussion: { discussion: { number: number; title: string; url: string } };
   }>(
     `mutation($repoId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
-      addDiscussion(input: { repositoryId: $repoId, categoryId: $categoryId, title: $title, body: $body }) {
+      createDiscussion(input: { repositoryId: $repoId, categoryId: $categoryId, title: $title, body: $body }) {
         discussion { number title url }
       }
     }`,
     { repoId: repositoryId, categoryId: category.id, title, body },
   );
 
-  return result.addDiscussion.discussion;
+  return result.createDiscussion.discussion;
 }
 
 export async function createDiscussionComment(
@@ -269,51 +267,6 @@ export async function createDiscussionComment(
   return result.addDiscussionComment.comment;
 }
 
-/** Aggregate recent discussions across repos the user owns (cap repos scanned). */
-export async function listMyDiscussions(
-  rest: GitHubRestClient,
-  options?: { username?: string; maxRepos?: number; perRepo?: number },
-): Promise<{
-  username: string;
-  reposScanned: number;
-  discussions: Array<DiscussionSummary & { owner: string; repo: string }>;
-}> {
-  const repos = await listUserRepositories(rest, {
-    username: options?.username,
-    type: "owner",
-    maxPages: 1,
-    perPage: 100,
-  });
-  const maxRepos = Math.min(Math.max(options?.maxRepos ?? 10, 1), 20);
-  const perRepo = Math.min(Math.max(options?.perRepo ?? 5, 1), 20);
-
-  const withDiscussions = repos.repositories.filter((r) => r.has_discussions);
-  const toScan = withDiscussions.slice(0, maxRepos);
-  const aggregated: Array<DiscussionSummary & { owner: string; repo: string }> = [];
-
-  for (const repo of toScan) {
-    const full = String(repo.full_name ?? "");
-    const [owner, name] = full.split("/");
-    if (!owner || !name) continue;
-    try {
-      const listed = await listDiscussions(rest, owner, name, { first: perRepo });
-      for (const d of listed.discussions) {
-        aggregated.push({ ...d, owner, repo: name });
-      }
-    } catch {
-      // skip repos without discussions enabled
-    }
-  }
-
-  aggregated.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
-
-  return {
-    username: repos.username,
-    reposScanned: toScan.length,
-    discussions: aggregated,
-  };
-}
-
 export function formatDiscussionsListMarkdown(result: {
   owner: string;
   repo: string;
@@ -335,49 +288,4 @@ export function formatDiscussionsListMarkdown(result: {
   return [`**${result.owner}/${result.repo}** — ${result.discussions.length} thread(s)`, "", ...lines].join(
     "\n",
   );
-}
-
-export function formatMyDiscussionsMarkdown(result: {
-  username: string;
-  reposScanned: number;
-  discussions: Array<DiscussionSummary & { owner: string; repo: string }>;
-}): string {
-  if (result.discussions.length === 0) {
-    return `No recent discussions on repos scanned for **@${result.username}** (${result.reposScanned} repo(s) with Discussions enabled).`;
-  }
-  const lines = result.discussions.map((d) => {
-    const meta = [d.category ? `_${d.category}_` : "", d.updatedAt?.slice(0, 10) ?? ""]
-      .filter(Boolean)
-      .join(" · ");
-    return `- [${d.owner}/${d.repo} #${d.number}](${d.url}) **${d.title}**${meta ? ` — ${meta}` : ""}`;
-  });
-  return [
-    `**@${result.username}** — ${result.discussions.length} thread(s) across ${result.reposScanned} repo(s)`,
-    "",
-    ...lines,
-  ].join("\n");
-}
-
-/** Parse `repo:owner/name` from a GitHub search-style query. */
-export function parseRepoFromDiscussionSearchQuery(query: string): { owner: string; repo: string } | null {
-  const match = query.match(/repo:([^/\s]+)\/([^/\s]+)/i);
-  if (!match?.[1] || !match[2]) return null;
-  return { owner: match[1], repo: match[2] };
-}
-
-/** Try REST list (works on some repos e.g. community/community). */
-export async function listDiscussionsRest(
-  rest: GitHubRestClient,
-  owner: string,
-  repo: string,
-  perPage = 20,
-): Promise<{ discussions: Array<Record<string, unknown>> } | null> {
-  try {
-    const items = await rest.getJson<Array<Record<string, unknown>>>(
-      `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/discussions?per_page=${perPage}`,
-    );
-    return { discussions: items };
-  } catch {
-    return null;
-  }
 }

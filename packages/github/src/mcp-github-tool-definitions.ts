@@ -137,21 +137,9 @@ export const GITHUB_MCP_TOOL_DEFINITIONS = [
     },
   },
   {
-    name: "search_discussions",
-    description:
-      "List or search discussions. Queries with `repo:owner/name` use GraphQL (recommended). Other queries use GitHub search API.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: { type: "string" },
-        per_page: { type: "number" },
-      },
-      required: ["query"],
-    },
-  },
-  {
     name: "list_discussions",
-    description: "List discussions in a repository (GraphQL).",
+    description:
+      "List discussions in a repository (GraphQL). Use owner/repo `community/community` for GitHub Community, or any repo with Discussions enabled.",
     inputSchema: {
       type: "object",
       properties: {
@@ -217,18 +205,6 @@ export const GITHUB_MCP_TOOL_DEFINITIONS = [
         body: { type: "string" },
       },
       required: ["owner", "repo", "discussion_number", "body"],
-    },
-  },
-  {
-    name: "list_my_discussions",
-    description: "Aggregate recent discussions across repos the user owns (has_discussions).",
-    inputSchema: {
-      type: "object",
-      properties: {
-        username: { type: "string" },
-        max_repos: { type: "number" },
-        per_repo: { type: "number" },
-      },
     },
   },
   {

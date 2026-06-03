@@ -83,7 +83,7 @@ With **`gh auth login`**, your profile dossier loads at startup and is cached un
 | Change model | `gitmentor model` | `/model` |
 | Target role | `gitmentor me --role staff-engineer` | `/role <id>` |
 | Followers / following | — | `/followers` · `/following` |
-| Discussions | — | `/discussions` · `/discussions community` |
+| Discussions | — | `/discussions community` · `/discussions owner/repo` |
 | Apply profile writes | — | `/apply bio` · `/apply readme` · `/apply pin` |
 | Sign in | `gitmentor login [gh\|ollama]` | `/login` · `/login gh` |
 | Help | `gitmentor --help` | `/help` |
@@ -101,11 +101,11 @@ With **`gh auth login`**, your profile dossier loads at startup and is cached un
 
 ---
 
-## GitHub MCP (~26 tools)
+## GitHub MCP (~24 tools)
 
 Shipped on server `github` (auto-enabled when `gh` is authenticated):
 
-**Read / search:** `get_user`, `list_followers`, `list_following`, `list_user_repositories`, `get_repository`, `get_repository_file`, `list_repository_commits`, `list_repository_branches`, `list_starred_repositories`, `search_repositories`, `search_code`, `search_discussions`, discussion list/get/comments.
+**Read / search:** `get_user`, `list_followers`, `list_following`, `list_user_repositories`, `get_repository`, `get_repository_file`, `list_repository_commits`, `list_repository_branches`, `list_starred_repositories`, `search_repositories`, `search_code`, `list_discussions`, `get_discussion`, `list_discussion_comments`.
 
 **Write (own account only):** `update_user_profile`, `upsert_repository_file`, `update_repository_metadata`, `pin_repositories`, `fork_repository`, `follow_user`, `unfollow_user`, `create_repository`, `create_discussion`, `create_discussion_comment`.
 

@@ -6,10 +6,8 @@ import {
   formatFollowResultsMarkdown,
   formatFollowingListMarkdown,
   formatFollowersListMarkdown,
-  formatMyDiscussionsMarkdown,
   isGitHubMcpEnabled,
   listDiscussions,
-  listMyDiscussions,
   parseFollowUserMcpResult,
   type FollowUserResult,
   type ListFollowersResult,
@@ -118,18 +116,6 @@ export async function listDiscussionsRepoMarkdown(
   return formatDiscussionsListMarkdown(data);
 }
 
-export async function listMyDiscussionsMarkdown(
-  config: GitMentorConfig,
-  username: string,
-): Promise<string> {
-  const data = await githubTool<Awaited<ReturnType<typeof listMyDiscussions>>>(
-    config,
-    "list_my_discussions",
-    { username, max_repos: 10, per_repo: 5 },
-  );
-  return formatMyDiscussionsMarkdown(data);
-}
-
 export function formatFollowingMcpMarkdown(result: ListFollowingResult | string): string {
   if (typeof result === "string") {
     try {
@@ -188,7 +174,7 @@ export function formatGitHubMcpActionsHint(config: GitMentorConfig): string {
     "=== GITHUB MCP (write actions) ===",
     `Shipped tools on server \`github\`: ${shipped}.`,
     "When coaching your own profile (gh auth), the model can call these tools directly — do not claim writes without a tool result.",
-    "Use MCP for profile/repo reads and writes: `list_followers`, `list_following`, `get_user`, discussions tools, etc. Slash: `/followers`, `/following`, `/discussions`, `/fork`, `/apply`.",
+    "Use MCP for profile/repo reads and writes: `list_followers`, `list_following`, `get_user`, `list_discussions`, `get_discussion`, `create_discussion`, etc. Slash: `/followers`, `/following`, `/discussions community|owner/repo`, `/discuss create|reply`, `/fork`, `/apply`.",
     "Scopes: **`/auth refresh`** if follow_user returns 404.",
     ...toolsSection,
     "=== END GITHUB MCP ===",
