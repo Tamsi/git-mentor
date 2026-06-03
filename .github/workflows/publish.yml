@@ -1,0 +1,62 @@
+# Publishes git-mentor to npm via OIDC (Trusted Publisher on npmjs.com).
+# Configure on npm: Packages → git-mentor → Settings → Trusted publishing
+#   Repository: Tamsi/git-mentor
+#   Workflow filename: publish.yml
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify release tag matches package.json
+        if: github.event_name == 'release'
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          TAG="${TAG#v}"
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Release tag v$TAG does not match package.json ($PKG)"
+            exit 1
+          fi
+
+      - name: Verify git tag matches package.json
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          TAG="${TAG#v}"
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Git tag v$TAG does not match package.json ($PKG)"
+            exit 1
+          fi
+
+      - run: pnpm test
+      - run: npm publish
