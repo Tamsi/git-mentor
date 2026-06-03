@@ -1,12 +1,12 @@
-<p align="center">
-<pre>
+<div align="center">
+<pre style="display: inline-block; text-align: left; margin: 0; line-height: 1.15;">
    ________________   __  __________   ____________  ____ 
   / ____/  _/_  __/  /  |/  / ____/ | / /_  __/ __ \/ __ \
  / / __ / /  / /    / /|_/ / __/ /  |/ / / / / / / / /_/ /
 / /_/ // /  / /    / /  / / /___/ /|  / / / / /_/ / _, _/ 
 \____/___/ /_/    /_/  /_/_____/_/ |_/ /_/  \____/_/ |_|  
 </pre>
-</p>
+</div>
 
 <p align="center">
   <sub>Evidence-backed GitHub career intelligence — chat-first, local-first</sub>
