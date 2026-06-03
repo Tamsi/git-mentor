@@ -1,7 +1,8 @@
 import React from "react";
 import { Box, Text, useStdout } from "ink";
 import { GITHUB_MCP_SERVER_NAME, GITHUB_MCP_SHIPPED_TOOLS } from "@git-mentor/github";
-import { colors, LOGO } from "../ui/colors.js";
+import { colors } from "../ui/colors.js";
+import { LOGO, LOGO_TAGLINE, LOGO_WIDTH } from "../ui/logo.js";
 import { GITMENTOR_VERSION, SLASH_COMMAND_GROUPS } from "../ui/banner.js";
 import { TipsBox } from "./TipsBox.js";
 
@@ -16,7 +17,7 @@ export function StartupPanel(props: {
   totalSkills: number;
 }) {
   const { columns } = useStdout();
-  const wide = columns >= 88;
+  const wide = columns >= LOGO_WIDTH + 24;
 
   const profileLabel = props.profileLoaded
     ? { text: "profile loaded", color: colors.success as string }
@@ -29,9 +30,12 @@ export function StartupPanel(props: {
   if (!wide) {
     return (
       <Box flexDirection="column" marginBottom={1}>
-        <Text color={colors.brand} bold>
-          git-mentor
-        </Text>
+        {LOGO.map((line) => (
+          <Text key={line} color={colors.brand}>
+            {line}
+          </Text>
+        ))}
+        <Text color={colors.muted}>{LOGO_TAGLINE}</Text>
         <Text color={colors.muted}>
           v{GITMENTOR_VERSION} · @{props.username} · {props.roleId}
         </Text>
@@ -56,6 +60,7 @@ export function StartupPanel(props: {
           {line}
         </Text>
       ))}
+      <Text color={colors.muted}>{LOGO_TAGLINE}</Text>
 
       <Box
         borderStyle="round"
@@ -66,9 +71,8 @@ export function StartupPanel(props: {
       >
         <Box flexDirection="column" width="48%" paddingRight={1}>
           <Text color={colors.brand} bold>
-            git-mentor v{GITMENTOR_VERSION}
+            v{GITMENTOR_VERSION}
           </Text>
-          <Text color={colors.muted}>Evidence-backed GitHub career coach</Text>
           <Text> </Text>
           <Text>
             <Text color={colors.brand}>@</Text>

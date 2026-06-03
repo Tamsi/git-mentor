@@ -1,6 +1,6 @@
 import type { GitMentorConfig } from "@git-mentor/core";
 import { GITHUB_MCP_SERVER_NAME, GITHUB_MCP_SHIPPED_TOOLS, isGitHubMcpEnabled } from "@git-mentor/github";
-import { LOGO } from "./colors.js";
+import { LOGO, LOGO_TAGLINE } from "./logo.js";
 import { theme } from "./theme.js";
 
 export const GITMENTOR_VERSION = "0.1.0";
@@ -33,19 +33,12 @@ export interface TerminalBannerOptions {
 }
 
 export function printTerminalBanner(options: TerminalBannerOptions = {}): void {
-  const wide = (process.stdout.columns ?? 80) >= 88;
-
   console.log();
-  if (wide) {
-    for (const line of LOGO) console.log(theme.brand(line));
-    console.log();
-  } else {
-    console.log(theme.brandBold("git-mentor"));
-    console.log(theme.muted("Evidence-backed GitHub career coach"));
-    console.log();
-  }
+  for (const line of LOGO) console.log(theme.brand(line));
+  console.log(theme.muted(LOGO_TAGLINE));
+  console.log();
 
-  const title = theme.brandBold(`git-mentor v${GITMENTOR_VERSION}`);
+  const title = theme.brandBold(`v${GITMENTOR_VERSION}`);
   const border = theme.border("─".repeat(Math.min(process.stdout.columns ?? 72, 72)));
   console.log(border);
   console.log(title);

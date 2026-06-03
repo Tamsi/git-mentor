@@ -1,5 +1,14 @@
 <p align="center">
-  <strong>git-mentor</strong><br/>
+<pre>
+   ________________   __  __________   ____________  ____ 
+  / ____/  _/_  __/  /  |/  / ____/ | / /_  __/ __ \/ __ \
+ / / __ / /  / /    / /|_/ / __/ /  |/ / / / / / / / /_/ /
+/ /_/ // /  / /    / /  / / /___/ /|  / / / / /_/ / _, _/ 
+\____/___/ /_/    /_/  /_/_____/_/ |_/ /_/  \____/_/ |_|  
+</pre>
+</p>
+
+<p align="center">
   <sub>Evidence-backed GitHub career intelligence — chat-first, local-first</sub>
 </p>
 
