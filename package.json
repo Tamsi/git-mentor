@@ -4,9 +4,15 @@
   "description": "Evidence-backed GitHub career intelligence — chat, CLI, MCP, local-first.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tamsi/git-mentor.git"
+  },
+  "homepage": "https://github.com/Tamsi/git-mentor#readme",
+  "bugs": "https://github.com/Tamsi/git-mentor/issues",
   "bin": {
-    "gitmentor": "./packages/cli/dist/cli.js",
-    "git-mentor": "./packages/cli/dist/cli.js"
+    "gitmentor": "packages/cli/dist/cli.js",
+    "git-mentor": "packages/cli/dist/cli.js"
   },
   "files": [
     "packages/cli/dist",
@@ -40,5 +46,13 @@
     "node": ">=20"
   },
   "packageManager": "pnpm@9.15.0",
-  "keywords": ["github", "ai", "agents", "mcp", "career", "cli", "ollama"]
+  "keywords": [
+    "github",
+    "ai",
+    "agents",
+    "mcp",
+    "career",
+    "cli",
+    "ollama"
+  ]
 }
