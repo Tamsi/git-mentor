@@ -23,4 +23,4 @@ jobs:
       - run: pnpm build
       - run: node packages/cli/scripts/verify-publish-bundle.mjs
       - run: pnpm test
-      - run: pnpm exec git-mentor eval --json
+      - run: node packages/cli/dist/cli.js eval --json

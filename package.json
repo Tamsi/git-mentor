@@ -20,6 +20,7 @@
     "prepare": "node scripts/postinstall.mjs",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "eval:ci": "node packages/cli/dist/cli.js eval --json",
     "prepublishOnly": "pnpm build && node packages/cli/scripts/verify-publish-bundle.mjs"
   },
   "dependencies": {
