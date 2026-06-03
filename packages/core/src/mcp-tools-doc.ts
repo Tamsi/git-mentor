@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import { MCP_TOOLS_FILE } from "./config.js";
 
-const MAX_INJECT_CHARS = 2_800;
+/** Full tools.md can be ~10k chars; keep enough for §2 GitHub tools + §4 routing. */
+const MAX_INJECT_CHARS = 12_000;
 
 /** Load GitHub + git-mentor MCP tools reference for system prompts. */
 export function loadMcpToolsDoc(): string | null {

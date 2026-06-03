@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import SelectInput from "ink-select-input";
 import Spinner from "ink-spinner";
@@ -10,6 +10,7 @@ import {
   modelLabel,
   ensureOllamaModel,
   isCloudCatalogName,
+  isCloudTag,
   signInToOllama,
 } from "@git-mentor/llm";
 import { colors } from "../ui/colors.js";
@@ -29,13 +30,21 @@ export interface ModelPickerResult {
 interface ModelSelectViewProps {
   config: GitMentorConfig;
   onDone: (result: ModelPickerResult) => void;
+  /** When set (chat UI), "Sign in" opens `/login` (GitHub + Ollama) instead of Ollama-only. */
+  onRequestFullLogin?: () => void;
   /** When true (CLI `gitmentor model`), exit Ink after completion. */
   standalone?: boolean;
   /** First-run onboarding — selection is required and persisted as default. */
   firstRun?: boolean;
 }
 
-export function ModelSelectView({ config, onDone, standalone = false, firstRun = false }: ModelSelectViewProps) {
+export function ModelSelectView({
+  config,
+  onDone,
+  onRequestFullLogin,
+  standalone = false,
+  firstRun = false,
+}: ModelSelectViewProps) {
   const { exit } = useApp();
   const [phase, setPhase] = useState<"loading" | "pick" | "signin" | "preparing">("loading");
   const [items, setItems] = useState<ModelPickerItem[]>([]);
@@ -45,6 +54,7 @@ export function ModelSelectView({ config, onDone, standalone = false, firstRun =
   );
   const [signedIn, setSignedIn] = useState(false);
   const [signInStatus, setSignInStatus] = useState("");
+  const [loadingHint, setLoadingHint] = useState("Loading models…");
 
   const finish = (result: ModelPickerResult) => {
     onDone(result);
@@ -66,24 +76,33 @@ export function ModelSelectView({ config, onDone, standalone = false, firstRun =
       return;
     }
 
-    void (async () => {
-      const [loadedCatalog, auth] = await Promise.all([
-        listOllamaModelCatalog(config.llm.baseUrl),
-        getOllamaAuthStatus(),
-      ]);
-      const pickerItems = buildModelPickerItems(loadedCatalog, auth.signedIn);
-      if (pickerItems.length === 0) {
-        finish({ changed: false, message: "No Ollama models found. Is Ollama running?" });
-        return;
-      }
-
-      setCatalog(loadedCatalog);
-      setSignedIn(auth.signedIn);
-      setItems(pickerItems);
-      setInitialIndex(Math.max(0, pickerItems.findIndex((item) => item.value === config.llm.model)));
-      setPhase("pick");
-    })();
+    void loadPickerCatalog();
   }, [config]);
+
+  const loadPickerCatalog = async () => {
+    setPhase("loading");
+    setLoadingHint("Loading models…");
+    const [loadedCatalog, auth] = await Promise.all([
+      listOllamaModelCatalog(config.llm.baseUrl, { onStatus: setLoadingHint }),
+      getOllamaAuthStatus(),
+    ]);
+    const pickerItems = buildModelPickerItems(loadedCatalog, auth.signedIn);
+    if (pickerItems.length === 0) {
+      finish({
+        changed: false,
+        message: auth.signedIn
+          ? "No Ollama models found. Is Ollama running?"
+          : "No local models found. Run **gitmentor login** (or pick Sign in) for cloud models.",
+      });
+      return;
+    }
+
+    setCatalog(loadedCatalog);
+    setSignedIn(auth.signedIn);
+    setItems(pickerItems);
+    setInitialIndex(Math.max(0, pickerItems.findIndex((item) => item.value === config.llm.model)));
+    setPhase("pick");
+  };
 
   const finishSignIn = async (): Promise<boolean> => {
     setPhase("signin");
@@ -93,10 +112,8 @@ export function ModelSelectView({ config, onDone, standalone = false, firstRun =
         onStatus: setSignInStatus,
       });
       setSignedIn(true);
-      finish({
-        changed: false,
-        message: `Signed in to Ollama as ${result.username}. Run /model to pick a cloud model.`,
-      });
+      setSignInStatus(`Signed in as ${result.username}. Refreshing model list…`);
+      await loadPickerCatalog();
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Ollama sign-in failed.";
@@ -109,11 +126,18 @@ export function ModelSelectView({ config, onDone, standalone = false, firstRun =
     if (!catalog) return;
 
     if (selected === SIGNIN_VALUE) {
+      if (onRequestFullLogin) {
+        onRequestFullLogin();
+        return;
+      }
       await finishSignIn();
       return;
     }
 
-    const isCloud = isCloudCatalogName(selected, catalog.cloud);
+    const isCloud =
+      isCloudTag(selected) ||
+      isCloudCatalogName(selected, catalog.cloud) ||
+      catalog.registeredCloud.includes(selected);
     if (isCloud && !signedIn) {
       setPhase("signin");
       setSignInStatus("Cloud model requires Ollama sign-in…");
@@ -133,8 +157,12 @@ export function ModelSelectView({ config, onDone, standalone = false, firstRun =
 
     setPhase("preparing");
     setSignInStatus(`Connecting ${selected}…`);
-    const ready = await ensureOllamaModel(config.llm, setSignInStatus);
-    config.llm.model = ready.model;
+    const ready = await ensureOllamaModel(config.llm, setSignInStatus, {
+      respectUserChoice: true,
+    });
+    if (ready.changed) {
+      config.llm.model = ready.model;
+    }
     markModelConfigured(config);
     saveConfig(config);
 
@@ -153,7 +181,7 @@ export function ModelSelectView({ config, onDone, standalone = false, firstRun =
         <Text color={colors.brand}>
           <Spinner type="dots" />
         </Text>
-        <Text> Loading models…</Text>
+        <Text> {loadingHint}</Text>
       </Box>
     );
   }
@@ -207,21 +235,28 @@ export function SignInView({
   const { exit } = useApp();
   const [status, setStatus] = useState("Starting Ollama sign-in…");
 
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+  const startedRef = useRef(false);
+
   useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+
     void (async () => {
       try {
         const result = await signInToOllama({ onStatus: setStatus });
-        onDone({
+        onDoneRef.current({
           changed: false,
           message: `Signed in to Ollama as ${result.username}. Run /model to pick a cloud model.`,
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Ollama sign-in failed.";
-        onDone({ changed: false, message });
+        onDoneRef.current({ changed: false, message });
       }
       if (standalone) exit();
     })();
-  }, [exit, onDone, standalone]);
+  }, [exit, standalone]);
 
   return (
     <Box flexDirection="column">

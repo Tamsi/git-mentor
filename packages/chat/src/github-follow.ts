@@ -1,75 +1,16 @@
-import type { GitMentorConfig, ProfileToFollow } from "@git-mentor/core";
+import type { GitMentorConfig } from "@git-mentor/core";
 import { assertCanFollowUsers, hasGitHubAuth, isGitHubMcpEnabled } from "@git-mentor/github";
 import { followProfilesViaGitHubMcp, formatFollowResultsMarkdown } from "./github-mcp.js";
 import { formatToolResult } from "./prompts.js";
 import type { ChatReply, ProgressCallback } from "./types.js";
 
-const DEICTIC_FOLLOW =
-  /^follow\s+(those|these|them|all)(\s+(profiles?|users?|people|accounts?))?\s*(on\s+github)?[.!?\s]*$/i;
+import { stripAtUsername } from "./command-utils.js";
 
-const RESERVED = new Set([
-  "follow",
-  "those",
-  "these",
-  "them",
-  "all",
-  "profiles",
-  "profile",
-  "users",
-  "user",
-  "people",
-  "accounts",
-  "account",
-  "on",
-  "github",
-  "apply",
-  "and",
-  "or",
-]);
-
-export function isFollowActionIntent(input: string): boolean {
-  const trimmed = input.trim();
-  if (!/^follow\b/i.test(trimmed)) return false;
-  if (/^follow\s+(up|best\s+practices|for\s+updates)/i.test(trimmed)) return false;
-  return true;
-}
-
-export function resolveFollowTargets(input: string, cached: ProfileToFollow[]): string[] {
-  const trimmed = input.trim();
-  const lower = trimmed.toLowerCase();
-
-  if (
-    !trimmed ||
-    lower === "follow" ||
-    lower === "follow apply" ||
-    lower === "follow all" ||
-    DEICTIC_FOLLOW.test(trimmed)
-  ) {
-    return cached.map((profile) => profile.username);
-  }
-
-  const match = trimmed.match(/^follow\s+(.+)$/i);
-  if (!match?.[1]) return cached.map((profile) => profile.username);
-
-  const rest = match[1];
-  if (DEICTIC_FOLLOW.test(trimmed)) {
-    return cached.map((profile) => profile.username);
-  }
-
-  const explicit: string[] = [];
-  for (const token of rest.matchAll(/@?([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37})?)/g)) {
-    const username = token[1];
-    if (!username || RESERVED.has(username.toLowerCase())) continue;
-    explicit.push(username);
-  }
-
-  return explicit.length > 0 ? explicit : cached.map((profile) => profile.username);
-}
+export const stripGitHubUsername = stripAtUsername;
 
 export async function runFollowProfilesOnGitHub(options: {
   config: GitMentorConfig;
-  input: string;
-  cachedProfiles: ProfileToFollow[];
+  usernames: string[];
   onProgress?: ProgressCallback;
 }): Promise<ChatReply> {
   if (!hasGitHubAuth(options.config)) {
@@ -87,12 +28,12 @@ export async function runFollowProfilesOnGitHub(options: {
     };
   }
 
-  const targets = resolveFollowTargets(options.input, options.cachedProfiles);
+  const targets = [...new Set(options.usernames.map(stripGitHubUsername).filter(Boolean))];
   if (targets.length === 0) {
     return {
       content: formatToolResult(
         "No profiles to follow",
-        "Run **`/follow`** first to load role models, then **`/follow apply`** or say **`follow them`** / **`follow those profiles`**.",
+        "Run **`/follow`** first, then **`/follow apply`**. Or ask in chat (with GitHub tools) to follow specific users via `follow_user`.",
       ),
       toolUsed: "follow-apply",
     };

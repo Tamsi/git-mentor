@@ -10,6 +10,7 @@
   },
   "files": [
     "packages/cli/dist",
+    "packages/cli/templates",
     "scripts/postinstall.mjs",
     "README.md",
     "LICENSE"
@@ -18,7 +19,8 @@
     "postinstall": "node scripts/postinstall.mjs",
     "prepare": "node scripts/postinstall.mjs",
     "build": "pnpm -r build",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "prepublishOnly": "pnpm build && node packages/cli/scripts/verify-publish-bundle.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",

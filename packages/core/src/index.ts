@@ -8,3 +8,6 @@ export * from "./agent-context.js";
 export * from "./profile-attractiveness.js";
 export * from "./profile-dossier.js";
 export * from "./mcp-tools-doc.js";
+export * from "./mcp-builtin-tools.js";
+export * from "./mcp-server-path.js";
+export * from "./login-target.js";

@@ -18,6 +18,7 @@ Make the profile **sell the target role** in under 30 seconds of scrolling.
    - **Repo READMEs** — flag showcase repos with thin or missing READMEs
 3. Use `/improve` output when available; expand with repo-specific examples.
 4. End with **3 prioritized edits** ranked by hiring-manager impact (pins > bio > profile README).
+5. When the user wants changes applied on GitHub, use skill **`github-profile-write`** and `/apply` or MCP write tools after explicit confirmation.
 
 ## Output format
 

@@ -6,7 +6,7 @@ export interface FollowUserResult {
 
 export function formatFollowResultsMarkdown(results: FollowUserResult[]): string {
   if (results.length === 0) {
-    return "_No profiles to follow. Run `/follow` first, then `/follow apply` or say `follow them`._";
+    return "_No profiles to follow. Run `/follow` first, then `/follow apply`._";
   }
 
   const lines = results.map((entry) => {

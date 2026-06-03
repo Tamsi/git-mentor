@@ -1,5 +1,10 @@
+export function stripAtUsername(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
+}
+
 export function isProfileAnalyzeTarget(value: string): boolean {
-  const normalized = value.toLowerCase().replace(/^@/, "");
+  const normalized = stripAtUsername(value).toLowerCase();
   return normalized === "profile" || normalized === "me" || normalized === "self";
 }
 
@@ -7,7 +12,8 @@ export function formatCommandError(error: unknown, context?: string): string {
   const message = error instanceof Error ? error.message : String(error);
 
   if (message.includes("Ollama error")) {
-    return `LLM error: ${message.replace(/^Ollama error: /, "")}`;
+    const prefix = "Ollama error: ";
+    return `LLM error: ${message.startsWith(prefix) ? message.slice(prefix.length) : message}`;
   }
 
   const status = (error as { status?: number })?.status;

@@ -24,9 +24,20 @@ import {
   listExternalMcpTools,
 } from "./mcp-client.js";
 import { formatToolResult, NEED_ANALYSIS_MESSAGE } from "./prompts.js";
-import { formatCommandError, isProfileAnalyzeTarget } from "./command-utils.js";
-import { runFollowProfilesOnGitHub } from "./github-follow.js";
+import { formatCommandError, isProfileAnalyzeTarget, stripAtUsername } from "./command-utils.js";
+import { runFollowProfilesOnGitHub, stripGitHubUsername } from "./github-follow.js";
+import {
+  formatFollowingMcpMarkdown,
+  listFollowingViaGitHubMcp,
+} from "./github-mcp.js";
 import { handleGitHubAuthCommand } from "./github-auth.js";
+import {
+  formatFollowersMcpMarkdown,
+  listDiscussionsRepoMarkdown,
+  listMyDiscussionsMarkdown,
+  listFollowersViaGitHubMcp,
+} from "./github-mcp.js";
+import { APPLY_USAGE, applyBio, applyPin, applyReadme } from "./github-apply.js";
 import type { ChatReply, ProgressCallback } from "./types.js";
 
 export const ANALYZE_USAGE = [
@@ -67,7 +78,7 @@ const handlers: Record<string, CommandHandler> = {
     const first = args[0]!.toLowerCase();
     if (isProfileAnalyzeTarget(first)) {
       const userArg = args[0]?.toLowerCase() === "profile" ? args[1] : args[1];
-      if (userArg?.replace(/^@/, "")) ctx.setUsername(userArg.replace(/^@/, ""));
+      if (userArg) ctx.setUsername(stripAtUsername(userArg));
 
       try {
         const opening = await ctx.runProfileAnalysis(onProgress);
@@ -154,10 +165,144 @@ const handlers: Record<string, CommandHandler> = {
     return {
       content: formatToolResult(
         "Trending repos for your expertise",
-        `${formatTrendingReposMarkdown(repos)}\n\nFork one with \`/fork owner/repo\` or \`fork reponame\` (uses GitHub MCP).\nSee role models with \`/follow\`.`,
+        `${formatTrendingReposMarkdown(repos)}\n\nFork with \`/fork owner/repo\`. See role models with \`/follow\`.`,
       ),
       toolUsed: "trending",
     };
+  },
+
+  following: async (ctx, args) => {
+    const target = args[0] ? stripGitHubUsername(args[0]) : ctx.getUsername();
+    try {
+      const result = await listFollowingViaGitHubMcp(
+        ctx.config,
+        target.toLowerCase() === ctx.getUsername().toLowerCase() ? undefined : target,
+      );
+      return {
+        content: formatFollowingMcpMarkdown(result),
+        toolUsed: "following",
+      };
+    } catch (error) {
+      return { content: formatCommandError(error), toolUsed: "following" };
+    }
+  },
+
+  followers: async (ctx, args) => {
+    const target = args[0] ? stripGitHubUsername(args[0]) : ctx.getUsername();
+    try {
+      const result = await listFollowersViaGitHubMcp(
+        ctx.config,
+        target.toLowerCase() === ctx.getUsername().toLowerCase() ? undefined : target,
+      );
+      return {
+        content: formatFollowersMcpMarkdown(result),
+        toolUsed: "followers",
+      };
+    } catch (error) {
+      return { content: formatCommandError(error), toolUsed: "followers" };
+    }
+  },
+
+  discussions: async (ctx, args) => {
+    const joined = args.join(" ").trim();
+    if (!joined || joined === "help") {
+      return {
+        content: [
+          "**Discussions**",
+          "- `/discussions` — recent threads on your owned repos",
+          "- `/discussions owner/repo` — list threads in one repo",
+          "- `/discussions community` — latest threads on [community/community](https://github.com/orgs/community/discussions)",
+          "- `/discuss create owner/repo Title | Body` — new thread (confirm intent)",
+          "- `/discuss reply owner/repo NUMBER | comment` — reply on thread #NUMBER",
+        ].join("\n"),
+        toolUsed: "discussions",
+      };
+    }
+
+    if (joined.toLowerCase() === "community") {
+      try {
+        const body = await listDiscussionsRepoMarkdown(ctx.config, "community", "community", 15);
+        return { content: formatToolResult("Community discussions", body), toolUsed: "discussions" };
+      } catch (error) {
+        return { content: formatCommandError(error), toolUsed: "discussions" };
+      }
+    }
+
+    if (!joined.includes("/")) {
+      try {
+        const body = await listMyDiscussionsMarkdown(ctx.config, ctx.getUsername());
+        return { content: formatToolResult("Your discussions", body), toolUsed: "discussions" };
+      } catch (error) {
+        return { content: formatCommandError(error), toolUsed: "discussions" };
+      }
+    }
+
+    const [owner, repo] = joined.split("/");
+    try {
+      const body = await listDiscussionsRepoMarkdown(ctx.config, owner!, repo!, 20);
+      return {
+        content: formatToolResult(`Discussions — ${owner}/${repo}`, body),
+        toolUsed: "discussions",
+      };
+    } catch (error) {
+      return { content: formatCommandError(error), toolUsed: "discussions" };
+    }
+  },
+
+  discuss: async (ctx, args) => {
+    const sub = args[0]?.toLowerCase();
+    if (sub === "create") {
+      const rest = args.slice(1).join(" ");
+      const pipe = rest.indexOf("|");
+      const repoPart = pipe >= 0 ? rest.slice(0, pipe).trim() : rest;
+      const bodyPart = pipe >= 0 ? rest.slice(pipe + 1).trim() : "";
+      const [owner, repo, ...titleParts] = repoPart.split(/\s+/);
+      const title = titleParts.join(" ");
+      if (!owner || !repo || !title || !bodyPart) {
+        return {
+          content: "Usage: `/discuss create owner/repo Title here | Body markdown`",
+          toolUsed: "discuss",
+        };
+      }
+      try {
+        const raw = await callExternalMcpTool(ctx.config, "github", "create_discussion", {
+          owner,
+          repo,
+          title,
+          body: bodyPart,
+        });
+        return { content: formatToolResult("Discussion created", raw), toolUsed: "discuss" };
+      } catch (error) {
+        return { content: formatCommandError(error), toolUsed: "discuss" };
+      }
+    }
+
+    if (sub === "reply") {
+      const rest = args.slice(1).join(" ");
+      const pipe = rest.indexOf("|");
+      const head = pipe >= 0 ? rest.slice(0, pipe).trim() : rest;
+      const body = pipe >= 0 ? rest.slice(pipe + 1).trim() : "";
+      const match = head.match(/^([\w.-]+)\/([\w.-]+)\s+(\d+)$/);
+      if (!match || !body) {
+        return {
+          content: "Usage: `/discuss reply owner/repo 123 | Your comment`",
+          toolUsed: "discuss",
+        };
+      }
+      try {
+        const raw = await callExternalMcpTool(ctx.config, "github", "create_discussion_comment", {
+          owner: match[1]!,
+          repo: match[2]!,
+          discussion_number: Number(match[3]),
+          body,
+        });
+        return { content: formatToolResult("Comment posted", raw), toolUsed: "discuss" };
+      } catch (error) {
+        return { content: formatCommandError(error), toolUsed: "discuss" };
+      }
+    }
+
+    return { content: "Use `/discussions help` or `/discuss create` / `/discuss reply`.", toolUsed: "discuss" };
   },
 
   follow: async (ctx, args, onProgress) => {
@@ -170,8 +315,23 @@ const handlers: Record<string, CommandHandler> = {
     if (sub === "apply" || sub === "all") {
       return runFollowProfilesOnGitHub({
         config: ctx.config,
-        input: "follow apply",
-        cachedProfiles: cached,
+        usernames: cached.map((profile) => profile.username),
+        onProgress,
+      });
+    }
+
+    const explicitUsers = args
+      .filter((token) => {
+        const lower = token.toLowerCase();
+        return lower !== "refresh" && lower !== "apply" && lower !== "all";
+      })
+      .map(stripGitHubUsername)
+      .filter(Boolean);
+
+    if (explicitUsers.length > 0) {
+      return runFollowProfilesOnGitHub({
+        config: ctx.config,
+        usernames: explicitUsers,
         onProgress,
       });
     }
@@ -180,7 +340,7 @@ const handlers: Record<string, CommandHandler> = {
       return {
         content: formatToolResult(
           `Profiles to follow (${ctx.getRoleId()})`,
-          `${formatProfilesToFollowMarkdown(cached)}\n\nFollow on GitHub: \`/follow apply\` or say \`follow them\` / \`follow those profiles\`.`,
+          `${formatProfilesToFollowMarkdown(cached)}\n\nFollow on GitHub: \`/follow apply\` or ask in chat to use \`follow_user\`.`,
         ),
         toolUsed: "follow",
       };
@@ -201,13 +361,55 @@ const handlers: Record<string, CommandHandler> = {
     return {
       content: formatToolResult(
         `Profiles to follow (${ctx.getRoleId()})`,
-        `${formatProfilesToFollowMarkdown(profiles)}\n\nStudy their pinned repos, README style, and contribution patterns.\nFollow on GitHub: \`/follow apply\` or \`follow them\`.`,
+        `${formatProfilesToFollowMarkdown(profiles)}\n\nStudy their pinned repos, README style, and contribution patterns.\nFollow on GitHub: \`/follow apply\`.`,
       ),
       toolUsed: "follow",
     };
   },
 
   fork: async (ctx, args, onProgress) => ctx.runForkCommand(args.join(" "), onProgress),
+
+  apply: async (ctx, args) => {
+    const sub = args[0]?.toLowerCase();
+    if (!sub || sub === "help") {
+      return { content: APPLY_USAGE, toolUsed: "apply" };
+    }
+    try {
+      if (sub === "bio") {
+        const text = args.slice(1).join(" ").trim();
+        if (!text) return { content: "Usage: `/apply bio Your bio text here`", toolUsed: "apply" };
+        return applyBio(ctx.config, ctx.getUsername(), text);
+      }
+      if (sub === "readme") {
+        const rest = args.slice(1);
+        let repoTarget: string | undefined;
+        let contentStart = 0;
+        if (rest[0]?.includes("/")) {
+          repoTarget = rest[0];
+          contentStart = 1;
+        }
+        const content = rest.slice(contentStart).join("\n").trim();
+        if (!content) {
+          return {
+            content:
+              "Usage: `/apply readme <markdown>` or `/apply readme owner/repo <markdown>`",
+            toolUsed: "apply",
+          };
+        }
+        return applyReadme(ctx.config, ctx.getUsername(), content, repoTarget);
+      }
+      if (sub === "pin") {
+        const repos = args.slice(1).filter(Boolean);
+        if (repos.length === 0) {
+          return { content: "Usage: `/apply pin owner/repo [owner/repo …]` (max 6)", toolUsed: "apply" };
+        }
+        return applyPin(ctx.config, ctx.getUsername(), repos);
+      }
+      return { content: `Unknown /apply subcommand \`${sub}\`. ${APPLY_USAGE}`, toolUsed: "apply" };
+    } catch (error) {
+      return { content: formatCommandError(error), toolUsed: "apply" };
+    }
+  },
 
   improve: async (ctx) => {
     const profileAnalysis = ctx.getProfileAnalysis();
@@ -376,25 +578,50 @@ const handlers: Record<string, CommandHandler> = {
 
   auth: async (ctx, args) => handleGitHubAuthCommand(ctx, args),
 
+  login: async (_ctx, args) => {
+    const sub = args[0]?.toLowerCase();
+    if (sub && !["gh", "github", "ollama", "both", "all"].includes(sub)) {
+      return {
+        content: "Usage: **`/login`** (GitHub + Ollama) · **`/login gh`** · **`/login ollama`**",
+      };
+    }
+    return {
+      content:
+        "Open the login flow in this UI with **`/login`** (both), **`/login gh`**, or **`/login ollama`**. Shell: **`gitmentor login`**.",
+      toolUsed: "login",
+    };
+  },
+
+  signin: async () => ({
+    content: "Same as **`/login ollama`** — run that to sign in to Ollama cloud.",
+    toolUsed: "signin",
+  }),
+
   help: async () => ({
     content: [
       ANALYZE_USAGE,
       "",
       "**Other commands**",
       "- /role <id> — set target role",
-      "- /model — pick LLM model (↑↓ Enter) · /model signin — Ollama cloud login",
+      "- /login — GitHub + Ollama (default) · /login gh · /login ollama",
+      "- /signin — alias for /login ollama",
+      "- /model — pick LLM model (↑↓ Enter)",
       "- /model <name> — set model directly (e.g. /model qwen3:8b)",
       "- /gaps — career gap analysis (requires /analyze profile)",
       "- /growth — recommendations",
       "- /trending — discover trending repos",
-      "- /follow — list role models · /follow apply — follow them on GitHub",
-      "- /fork <repo> — fork via GitHub MCP (after /trending or owner/repo)",
+      "- /following — accounts you follow · /followers — your followers",
+      "- /follow — role models · /follow apply — follow on GitHub",
+      "- /discussions — forum threads · /discuss create|reply",
+      "- /fork <repo> — fork via GitHub MCP",
+      "- /apply — write to your GitHub (bio, README, pins) — `/apply help`",
       "- /improve — GitHub profile improvement plan",
       "- /export — save Markdown dossier",
       "- /rules — list coaching rules · /rules reload · /rules on|off",
       "- /skills — list skills · /skills use <id> · /skills off <id>",
       "- /mcp — MCP servers and external tool bridge",
-      "- /auth — GitHub status · /auth login · /auth refresh (gh OAuth)",
+      "- /auth — GitHub status · /auth login · /auth refresh",
+      "- Shell: `gitmentor login` · `gitmentor login gh` · `gitmentor login ollama` · `gitmentor auth`",
       "- /help · /quit",
       "",
       "Free-form chat works once your profile is loaded (automatic with `gh auth`).",

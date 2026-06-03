@@ -97,7 +97,13 @@ class OllamaProvider implements LLMProvider {
       eval_count?: number;
     };
     if (!response.ok || data.error) {
-      throw new Error(`Ollama error: ${data.error ?? `HTTP ${response.status}`}`);
+      const err = data.error ?? `HTTP ${response.status}`;
+      if (/subscription/i.test(err)) {
+        throw new Error(
+          `Ollama error: ${err} — pick another model with /model or upgrade at https://ollama.com/upgrade`,
+        );
+      }
+      throw new Error(`Ollama error: ${err}`);
     }
     return {
       content: data.message?.content ?? "",

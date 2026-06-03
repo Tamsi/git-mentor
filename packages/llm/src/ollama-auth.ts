@@ -95,9 +95,11 @@ export async function signInToOllama(options?: {
     await sleep(pollIntervalMs);
     const check = await getOllamaAuthStatus();
     if (check.signedIn && check.username) {
+      const { clearOllamaCloudAccessCache } = await import("./ollama-cloud-cache.js");
+      clearOllamaCloudAccessCache(check.username);
       return { username: check.username, connectUrl: status.connectUrl };
     }
   }
 
-  throw new Error("Ollama sign-in timed out. Try again with `/model signin`.");
+  throw new Error("Ollama sign-in timed out. Try again with `gitmentor login ollama` or `/login ollama`.");
 }

@@ -42,7 +42,7 @@ import {
   resolveForkTarget,
 } from "./github-mcp.js";
 import { completeGitHubAuthFlow } from "./github-auth.js";
-import { isFollowActionIntent, runFollowProfilesOnGitHub } from "./github-follow.js";
+import { canUseAnyMcpToolCalling, chatWithMcpTools } from "./mcp-llm-tools.js";
 import { dispatchCommand, type CommandContext } from "./commands.js";
 import { routeInput } from "./input-router.js";
 import { formatCommandError, formatGitHubError, isProfileAnalyzeTarget } from "./command-utils.js";
@@ -87,7 +87,7 @@ export class ChatSession {
     this.router = new LLMRouter(config);
     this.roleId = roleId ?? config.defaultRole;
     this.agentBundle = loadAgentContext(this.config);
-    this.ensureGitHubMcp();
+    this.ensureMcpServers();
   }
 
   private commandContext(): CommandContext {
@@ -136,10 +136,10 @@ export class ChatSession {
     );
   }
 
-  private ensureGitHubMcp(): void {
-    if (ensureGitHubMcpServer(this.config)) {
-      saveConfig(this.config);
-    }
+  private ensureMcpServers(): void {
+    let changed = false;
+    if (ensureGitHubMcpServer(this.config)) changed = true;
+    if (changed) saveConfig(this.config);
   }
 
   async finalizeGitHubAuth(action: "login" | "refresh"): Promise<ChatReply> {
@@ -158,7 +158,7 @@ export class ChatSession {
       };
     }
 
-    this.ensureGitHubMcp();
+    this.ensureMcpServers();
 
     const target = resolveForkTarget(repoArg, this.trendingReposForFork());
     if (!target) {
@@ -177,32 +177,13 @@ export class ChatSession {
       return {
         content: formatToolResult(
           `Forked ${target.owner}/${target.repo}`,
-          `${result}\n\nNext: clone your fork, create a branch, and open a PR back to upstream.`,
+          `${result}\n\nNext: explore the fork on GitHub or run \`/analyze ${target.repo}\` on your fork.`,
         ),
         toolUsed: "fork",
       };
     } catch (error) {
       return { content: formatCommandError(error), toolUsed: "fork" };
     }
-  }
-
-  private tryGitHubActionInput(input: string, onProgress?: ProgressCallback): Promise<ChatReply> | null {
-    const forkMatch = input.match(/^fork\s+(.+)$/i);
-    if (forkMatch?.[1]) {
-      return this.runForkCommand(forkMatch[1], onProgress);
-    }
-
-    if (isFollowActionIntent(input)) {
-      const cached = this.profileAnalysis?.actionPlan?.github.profiles ?? [];
-      return runFollowProfilesOnGitHub({
-        config: this.config,
-        input,
-        cachedProfiles: cached,
-        onProgress,
-      });
-    }
-
-    return null;
   }
 
   private refreshLlmClients(): void {
@@ -213,7 +194,9 @@ export class ChatSession {
 
   private async syncOllamaModel(onProgress?: ProgressCallback): Promise<void> {
     if (this.config.llm.provider !== "ollama") return;
-    const ready = await ensureOllamaModel(this.config.llm, onProgress);
+    const ready = await ensureOllamaModel(this.config.llm, onProgress, {
+      respectUserChoice: this.config.llm.modelConfigured,
+    });
     if (ready.changed) {
       this.config.llm.model = ready.model;
       saveConfig(this.config);
@@ -311,7 +294,7 @@ export class ChatSession {
     }
 
     if (hasGitHubAuth(this.config)) {
-      this.ensureGitHubMcp();
+      this.ensureMcpServers();
       try {
         await this.syncOllamaModel(onProgress);
         const opening = await this.runProfileAnalysis(onProgress);
@@ -348,24 +331,35 @@ export class ChatSession {
     const trimmed = input.trim();
     const route = routeInput(trimmed, {
       hasProfile: Boolean(this.profileAnalysis),
-      tryGitHubAction: (value) => this.tryGitHubActionInput(value, onProgress),
     });
 
     if (route.kind === "empty") return { content: "" };
     if (route.kind === "command") return dispatchCommand(this.commandContext(), route.command, onProgress);
-    if (route.kind === "github-action") return route.run();
     if (route.kind === "need-analysis") return { content: NEED_ANALYSIS_MESSAGE };
 
     const systemPrompt = this.buildSessionSystemPrompt();
     const messages = messagesForChat(systemPrompt, this.history, route.message);
     await this.syncOllamaModel(onProgress);
-    const reply = await this.router.chat(messages);
-    this.recordUsage(reply.usage);
+
+    let assistantContent: string;
+    if (await canUseAnyMcpToolCalling(this.config, this.username)) {
+      onProgress?.("Thinking (MCP tools available)…");
+      assistantContent = await chatWithMcpTools({
+        config: this.config,
+        sessionUsername: this.username,
+        messages,
+        onToolStart: (name) => onProgress?.(`Tool: ${name}…`),
+      });
+    } else {
+      const reply = await this.router.chat(messages);
+      this.recordUsage(reply.usage);
+      assistantContent = reply.content;
+    }
 
     this.history.push({ role: "user", content: route.message });
-    this.history.push({ role: "assistant", content: reply.content });
+    this.history.push({ role: "assistant", content: assistantContent });
 
-    return { content: reply.content, analysis: this.profileAnalysis ?? undefined };
+    return { content: assistantContent, analysis: this.profileAnalysis ?? undefined };
   }
 
   async *handleInputStream(
@@ -375,7 +369,6 @@ export class ChatSession {
     const trimmed = input.trim();
     const route = routeInput(trimmed, {
       hasProfile: Boolean(this.profileAnalysis),
-      tryGitHubAction: (value) => this.tryGitHubActionInput(value, onProgress),
     });
 
     if (route.kind === "empty") {
@@ -383,11 +376,8 @@ export class ChatSession {
       return;
     }
 
-    if (route.kind === "command" || route.kind === "github-action") {
-      const reply =
-        route.kind === "command"
-          ? await dispatchCommand(this.commandContext(), route.command, onProgress)
-          : await route.run();
+    if (route.kind === "command") {
+      const reply = await dispatchCommand(this.commandContext(), route.command, onProgress);
       yield { type: "token", content: reply.content };
       yield { type: "done", content: reply.content, analysis: reply.analysis };
       return;
@@ -402,16 +392,27 @@ export class ChatSession {
     const systemPrompt = this.buildSessionSystemPrompt();
     const messages = messagesForChat(systemPrompt, this.history, route.message);
     await this.syncOllamaModel(onProgress);
-    let full = "";
-    let lastUsage: LlmUsage | undefined;
 
-    for await (const chunk of this.router.chatStream(messages)) {
-      full += chunk.content;
-      if (chunk.usage) lastUsage = chunk.usage;
-      if (chunk.content) yield { type: "token", content: chunk.content };
-      if (chunk.done) break;
+    let full = "";
+    if (await canUseAnyMcpToolCalling(this.config, this.username)) {
+      onProgress?.("Thinking (MCP tools available)…");
+      full = await chatWithMcpTools({
+        config: this.config,
+        sessionUsername: this.username,
+        messages,
+        onToolStart: (name) => onProgress?.(`Tool: ${name}…`),
+      });
+      if (full) yield { type: "token", content: full };
+    } else {
+      let lastUsage: LlmUsage | undefined;
+      for await (const chunk of this.router.chatStream(messages)) {
+        full += chunk.content;
+        if (chunk.usage) lastUsage = chunk.usage;
+        if (chunk.content) yield { type: "token", content: chunk.content };
+        if (chunk.done) break;
+      }
+      this.recordUsage(lastUsage);
     }
-    this.recordUsage(lastUsage);
 
     this.history.push({ role: "user", content: route.message });
     this.history.push({ role: "assistant", content: full });

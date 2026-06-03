@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { loadConfig } from "@git-mentor/core";
 import { WELCOME_MESSAGE } from "./prompts.js";
+import { stripAtUsername } from "./command-utils.js";
 import { ChatSession } from "./session.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -155,7 +156,7 @@ export function createChatServer(port = 3847) {
     if (req.url === "/api/session" && req.method === "POST") {
       const body = await readBody(req);
       const { username, roleId } = JSON.parse(body) as { username: string; roleId?: string };
-      const session = new ChatSession(config, username.replace(/^@/, ""), roleId);
+      const session = new ChatSession(config, stripAtUsername(username), roleId);
       const bootstrap = await session.bootstrap();
       const id = crypto.randomUUID();
       sessions.set(id, session);

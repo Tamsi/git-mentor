@@ -24,18 +24,17 @@ export function buildModelPickerItems(
 
   if (!signedIn && catalog.cloud.length > 0) {
     add({
-      label: "Sign in to Ollama (cloud models)",
+      label: "Sign in (gitmentor login)",
       value: SIGNIN_VALUE,
       hint: "auth",
     });
   }
 
   for (const name of catalog.local) {
-    add({
-      label: name,
-      value: name,
-      hint: isCloudTag(name) ? "cloud" : "local",
-    });
+    add({ label: name, value: name, hint: "local" });
+  }
+  for (const name of catalog.registeredCloud ?? []) {
+    add({ label: name, value: name, hint: "cloud" });
   }
   for (const name of catalog.cloud) {
     add({ label: name, value: resolveCloudModelTag(name), hint: "cloud" });

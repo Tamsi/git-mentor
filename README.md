@@ -15,7 +15,7 @@ npm install -g git-mentor
 The CLI command is **`gitmentor`** (`git-mentor` remains available as an alias). Then configure Ollama:
 
 ```bash
-gitmentor init --provider ollama --model qwen3:8b
+gitmentor init --provider ollama --model gpt-oss:20b
 gitmentor doctor
 ```
 
@@ -58,7 +58,18 @@ Example questions:
 - « What should I learn in the next 3 months? »
 - « Which OSS projects fit my stack? »
 
-Commands inside chat: `/analyze profile`, `/analyze <repo>`, `/role`, `/model`, `/gaps`, `/growth`, `/trending`, `/follow`, `/improve`, `/export`, `/help`, `/quit`
+Commands inside chat: `/analyze profile`, `/analyze <repo>`, `/role`, `/model`, `/gaps`, `/growth`, `/trending`, `/follow`, `/apply`, `/improve`, `/export`, `/help`, `/quit`
+
+**Apply changes on your GitHub** (requires `gh auth`, same account as the session):
+
+```bash
+gitmentor login              # GitHub + Ollama (default)
+gitmentor login gh           # GitHub only (gh)
+gitmentor login ollama       # Ollama cloud only
+gitmentor auth refresh       # extra GitHub scopes for fork/follow
+```
+
+In chat: `/login` (both) · `/login gh` · `/login ollama` · `/apply bio …` — Coaching another username is read-only.
 
 ### Stack
 
@@ -68,15 +79,15 @@ Commands inside chat: `/analyze profile`, `/analyze <repo>`, `/role`, `/model`, 
 - **Chalk** — colors for one-shot commands (`doctor`, `analyze`, …)
 
 ```bash
+gitmentor login ollama       # Ollama cloud (or gitmentor login for GH + Ollama)
 gitmentor model              # interactive picker
-gitmentor model signin       # Ollama cloud login (opens browser)
 gitmentor model qwen3:8b     # set model directly
 gitmentor model --list       # plain text list
 ```
 
-In chat: `/model` opens the picker · `/model signin` for Ollama cloud · `/model glm-5.1` to set directly
+In chat: `/login` · `/login ollama` · `/model` — same flows without leaving gitmentor.
 
-Cloud models require Ollama sign-in (`/model signin` or `gitmentor model signin`).
+Cloud models require **`gitmentor login ollama`** (or `/login ollama` in chat).
 
 ### Local app (browser)
 
@@ -88,7 +99,7 @@ gitmentor app
 ## Setup
 
 ```bash
-gitmentor init --provider ollama --model qwen3:8b
+gitmentor init --provider ollama --model gpt-oss:20b
 gitmentor auth              # GitHub token status
 gitmentor auth login        # browser sign-in (gh)
 gitmentor auth refresh      # add user scope for follow

@@ -58,7 +58,7 @@ function formatGrowthPlan(result: AnalysisResult): string {
     tech ? `Technologies to explore: ${tech}` : "",
     trending ? `Trending repos:\n${trending}` : "",
     roleModels
-      ? `Profiles to follow (use /follow apply or "follow them" after /follow):\n${roleModels}`
+      ? `Profiles to follow (use /follow apply or ask the model to call follow_user):\n${roleModels}`
       : "",
   ]
     .filter(Boolean)
@@ -222,10 +222,10 @@ export function buildWelcomeMessage(username: string, roleId: string): string {
     "",
     "_Note: your username in the header is not the same as a loaded coaching profile._",
     "",
-    "Connect GitHub with **`/auth login`** — your profile loads automatically after sign-in.",
+    "Sign in: **`gitmentor login`** or **`/login`** (GitHub + Ollama). Target one: **`/login gh`** · **`/login ollama`**.",
     "Or run **`/analyze profile`** to refresh your attractiveness audit (bio, README, pins, stats, activity).",
     "",
-    "Commands: `/gaps`, `/growth`, `/trending`, `/follow`, `/improve`, `/help`.",
+    "Commands: `/gaps`, `/growth`, `/trending`, `/following`, `/follow`, `/improve`, `/apply`, `/help`.",
   ].join("\n");
 }
 
@@ -248,7 +248,7 @@ export function buildProfileReadyMessage(
     "",
     options?.opening?.trim() ?? buildDeterministicOpening(analysis, roleId),
     "",
-    "Try `/gaps`, `/growth`, `/improve`, `/trending`, `/follow`, or ask anything about your GitHub profile.",
+    "Try `/gaps`, `/growth`, `/improve`, `/apply`, `/trending`, `/follow`, or ask anything about your GitHub profile.",
     "Run **`/analyze profile`** to refresh after you update bio, pins, or README.",
   ];
   return lines.filter((line) => line !== "").join("\n");
@@ -259,11 +259,12 @@ export const WELCOME_MESSAGE = [
   "Your GitHub profile loads automatically when `gh` is connected.",
   "Refresh with /analyze profile · deep-scan a repo with /analyze <repo>.",
   "",
-  "Commands: /analyze profile · /auth · /role · /model · /rules · /skills · /mcp · /gaps · /growth · /trending · /follow · /improve · /export · /help · /quit",
+  "Commands: /analyze profile · /followers · /following · /discussions · /login · /auth · /help · /quit",
+  "CLI: gitmentor login · gitmentor login gh · gitmentor login ollama",
 ].join("\n");
 
 export const NEED_ANALYSIS_MESSAGE =
-  "No GitHub profile loaded. Connect with **`/auth login`** or run **`/analyze profile`** (or `/analyze profile @user`).";
+  "No GitHub profile loaded. Run **`gitmentor login`** or **`/login gh`**, then **`/analyze profile`**.";
 
 export function formatToolResult(label: string, body: string): string {
   return `**${label}**\n\n${body}`;

@@ -10,10 +10,13 @@ import {
 } from "./mcp-setup.js";
 
 describe("GitHub MCP tool lists", () => {
-  it("ships only tools implemented in mcp-github-server", () => {
-    expect([...GITHUB_MCP_SHIPPED_TOOLS]).toEqual(["fork_repository", "follow_user"]);
-    expect(GITHUB_MCP_PLANNED_TOOLS).not.toContain("fork_repository");
-    expect(GITHUB_MCP_PLANNED_TOOLS).not.toContain("follow_user");
+  it("ships read, social, search, discussions, and profile write tools", () => {
+    expect(GITHUB_MCP_SHIPPED_TOOLS).toContain("list_followers");
+    expect(GITHUB_MCP_SHIPPED_TOOLS).toContain("list_following");
+    expect(GITHUB_MCP_SHIPPED_TOOLS).toContain("search_discussions");
+    expect(GITHUB_MCP_SHIPPED_TOOLS).toContain("create_discussion");
+    expect(GITHUB_MCP_SHIPPED_TOOLS).toContain("fork_repository");
+    expect(GITHUB_MCP_PLANNED_TOOLS).toHaveLength(0);
   });
 });
 
@@ -28,7 +31,7 @@ describe("ensureGitHubMcpServer", () => {
     expect(config.mcp.servers[0]?.args[0]).toContain("mcp-github-server.js");
   });
 
-  it("migrates legacy npx github MCP to git-mentor server with follow_user", () => {
+  it("migrates legacy npx github MCP to git-mentor server", () => {
     const config = GitMentorConfigSchema.parse({
       github: { token: "ghp_test", useGhCli: false },
       mcp: {

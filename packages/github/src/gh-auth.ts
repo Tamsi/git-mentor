@@ -140,9 +140,20 @@ export function syncGitHubMcpInConfig(config: GitMentorConfig): boolean {
   return ensureGitHubMcpServer(config);
 }
 
+function pushGhOutput(
+  chunk: string,
+  buffer: { stdout: string; stderr: string },
+  onStatus?: (message: string) => void,
+): void {
+  buffer.stdout += chunk;
+  const lines = chunk.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const hint = lines.at(-1);
+  if (hint) onStatus?.(hint);
+}
+
 export async function runGhAuthInteractive(
   action: "login" | "refresh",
-  options?: { onStatus?: (message: string) => void },
+  options?: { onStatus?: (message: string) => void; /** Avoid fighting Ink UI — capture gh output instead. */ piped?: boolean },
 ): Promise<void> {
   if (!isGhCliInstalled()) {
     throw new Error("GitHub CLI (`gh`) is not installed. Install from https://cli.github.com/");
@@ -160,20 +171,19 @@ export async function runGhAuthInteractive(
       : "Approve updated GitHub permissions in your browser…",
   );
 
-  const inherit = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  const inherit = !options?.piped && Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  const buffer = { stdout: "", stderr: "" };
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn("gh", args, {
       stdio: inherit ? "inherit" : ["ignore", "pipe", "pipe"],
     });
-    let stderr = "";
-    let stdout = "";
     if (!inherit) {
       child.stdout?.on("data", (chunk) => {
-        stdout += String(chunk);
+        pushGhOutput(String(chunk), buffer, options?.onStatus);
       });
       child.stderr?.on("data", (chunk) => {
-        stderr += String(chunk);
+        pushGhOutput(String(chunk), buffer, options?.onStatus);
       });
     }
     child.on("error", (error) => reject(error));
@@ -182,7 +192,7 @@ export async function runGhAuthInteractive(
         resolve();
         return;
       }
-      const detail = (stderr || stdout).trim();
+      const detail = (buffer.stderr || buffer.stdout).trim();
       reject(
         new Error(
           detail

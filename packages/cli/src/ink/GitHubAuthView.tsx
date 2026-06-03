@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, useApp } from "ink";
 import Spinner from "ink-spinner";
 import { runGhAuthInteractive } from "@git-mentor/github";
@@ -17,25 +17,31 @@ export function GitHubAuthView({
   const [status, setStatus] = useState(
     action === "login" ? "Starting GitHub sign-in…" : "Refreshing GitHub token…",
   );
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+  const startedRef = useRef(false);
 
   useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+
     void (async () => {
       try {
-        await runGhAuthInteractive(action, { onStatus: setStatus });
-        onDone({
+        await runGhAuthInteractive(action, { onStatus: setStatus, piped: true });
+        onDoneRef.current({
           ok: true,
           message:
             action === "login"
-              ? "GitHub sign-in finished. Run `/auth` to verify scopes."
+              ? "GitHub sign-in finished. Run `/auth` to verify scopes, or `/analyze profile` to load your dossier."
               : "GitHub scopes updated. You can retry `/follow apply`.",
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "GitHub auth failed.";
-        onDone({ ok: false, message });
+        onDoneRef.current({ ok: false, message });
       }
       if (standalone) exit();
     })();
-  }, [action, exit, onDone, standalone]);
+  }, [action, exit, standalone]);
 
   return (
     <Box flexDirection="column">
@@ -46,7 +52,7 @@ export function GitHubAuthView({
         <Spinner type="dots" />
       </Text>
       <Text> {status}</Text>
-      <Text color={colors.muted}>Complete the flow in your browser if prompted.</Text>
+      <Text color={colors.muted}>Enter the code on github.com/login/device if prompted.</Text>
     </Box>
   );
 }

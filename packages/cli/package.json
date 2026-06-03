@@ -14,7 +14,7 @@
     "templates"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/stage-mcp-servers.mjs",
     "prepublishOnly": "pnpm --filter git-mentor build",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",

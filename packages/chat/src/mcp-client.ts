@@ -1,25 +1,22 @@
 import type { GitMentorConfig } from "@git-mentor/core";
+import { GITMENTOR_BUILTIN_MCP_TOOLS } from "@git-mentor/core";
 import { GITHUB_MCP_SHIPPED_TOOLS, resolveGitHubTokenForMcp } from "@git-mentor/github";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-export const GITMENTOR_BUILTIN_MCP_TOOLS = [
-  "analyze_profile",
-  "compare_role",
-  "get_recommendations",
-  "discover_trending_repos",
-  "discover_profiles_to_follow",
-  "improve_profile",
-  "analyze_repository",
-  "analyze_repository_for_user",
-  "list_target_roles",
-  "list_rules",
-  "list_skills",
-  "get_agent_context",
-] as const;
+export { GITMENTOR_BUILTIN_MCP_TOOLS } from "@git-mentor/core";
 
 function resolveEnvValue(value: string): string {
-  return value.replace(/\$\{([^}]+)\}/g, (_, key: string) => process.env[key] ?? "");
+  let out = value;
+  let start = out.indexOf("${");
+  while (start !== -1) {
+    const end = out.indexOf("}", start);
+    if (end === -1) break;
+    const key = out.slice(start + 2, end);
+    out = out.slice(0, start) + (process.env[key] ?? "") + out.slice(end + 1);
+    start = out.indexOf("${", start);
+  }
+  return out;
 }
 
 function findServer(config: GitMentorConfig, name: string) {
@@ -116,7 +113,7 @@ export function formatMcpServersList(config: GitMentorConfig): string {
       lines.push(
         `  Shipped tools: ${GITHUB_MCP_SHIPPED_TOOLS.map((t) => `\`${t}\``).join(", ")} — see \`~/.config/git-mentor/mcp/tools.md\``,
       );
-      lines.push("  Chat: `/fork owner/repo` · `/follow apply` or `follow them`");
+      lines.push("  Chat: `/fork owner/repo` · `/follow apply` · GitHub tools in free-form chat");
     }
   }
   lines.push("", "Use `/mcp tools <server>` or `/mcp call <server> <tool> [json]`.");

@@ -1,18 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { routeInput } from "./input-router.js";
-import { isFollowActionIntent } from "./github-follow.js";
 
 describe("routeInput", () => {
-  it("routes follow those profiles to github-action before chat", () => {
-    const route = routeInput("follow those profiles", {
-      hasProfile: true,
-      tryGitHubAction: (input) => {
-        expect(input).toBe("follow those profiles");
-        expect(isFollowActionIntent(input)).toBe(true);
-        return Promise.resolve({ content: "ok" });
-      },
+  it("routes slash commands", () => {
+    expect(routeInput("/help", { hasProfile: true })).toEqual({
+      kind: "command",
+      command: "/help",
     });
+  });
 
-    expect(route.kind).toBe("github-action");
+  it("routes natural language to chat when profile is loaded", () => {
+    expect(routeInput("edit my description", { hasProfile: true })).toEqual({
+      kind: "chat",
+      message: "edit my description",
+    });
+  });
+
+  it("requires analysis when profile is missing", () => {
+    expect(routeInput("hello", { hasProfile: false }).kind).toBe("need-analysis");
   });
 });

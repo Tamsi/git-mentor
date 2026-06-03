@@ -19,6 +19,11 @@ import { Command } from "commander";
 import { bootstrapAgentAssets } from "./agent-bootstrap.js";
 import { ensureGitHubMcpServer } from "@git-mentor/github";
 import { theme } from "./ui/theme.js";
+import {
+  isGitMentorSubcommand,
+  printSubcommandHint,
+  runLoginCli,
+} from "./cli-actions.js";
 
 const program = new Command();
 
@@ -102,13 +107,27 @@ program
   .option("--role, -r <role>", "Target role id")
   .option("--deterministic", "Run without LLM")
   .action(async (username: string, opts: { role?: string; deterministic?: boolean }) => {
+    const key = username.replace(/^@/, "").toLowerCase();
+    if (isGitMentorSubcommand(key)) {
+      if (key === "signin") {
+        await runLoginCli("ollama");
+        return;
+      }
+      if (key === "login") {
+        await runLoginCli();
+        return;
+      }
+      printSubcommandHint(key);
+      process.exitCode = 1;
+      return;
+    }
     await launchChat(username, opts);
   });
 
 program
   .command("init")
   .option("--provider <provider>", "LLM provider", "ollama")
-  .option("--model <model>", "Model name", "qwen3:8b")
+  .option("--model <model>", "Model name", "gpt-oss:20b")
   .option("--base-url <url>", "LLM base URL", "http://localhost:11434")
   .option("--role <role>", "Default target role", "ai-engineer")
   .action((opts: { provider: string; model: string; baseUrl: string; role: string }) => {
@@ -133,6 +152,20 @@ program
   });
 
 program
+  .command("login [target]")
+  .description("Sign in: GitHub + Ollama (default), or gitmentor login gh | login ollama")
+  .action(async (target?: string) => {
+    await runLoginCli(target);
+  });
+
+program
+  .command("signin")
+  .description("Alias for gitmentor login ollama")
+  .action(async () => {
+    await runLoginCli("ollama");
+  });
+
+program
   .command("auth [action]")
   .description("GitHub auth via gh CLI: status (default), login, refresh")
   .action(async (action?: string) => {
@@ -151,20 +184,25 @@ program
     if (sub === "help") {
       console.log("Usage: gitmentor auth [status|login|refresh]");
       console.log("  status  — show account and OAuth scopes (default)");
-      console.log("  login   — browser sign-in (gh auth login)");
+      console.log("  login   — GitHub only (same as gitmentor login gh)");
       console.log("  refresh — add scopes for fork/follow (gh auth refresh)");
       return;
     }
 
-    if (sub === "login" || sub === "refresh") {
+    if (sub === "login") {
+      await runLoginCli("gh");
+      return;
+    }
+
+    if (sub === "refresh") {
       if (!isGhCliInstalled()) {
         console.log(chalk.red("GitHub CLI (gh) is not installed. https://cli.github.com/"));
         process.exitCode = 1;
         return;
       }
-      console.log(chalk.cyan(sub === "login" ? "Opening GitHub sign-in…" : "Refreshing GitHub token scopes…"));
+      console.log(chalk.cyan("Refreshing GitHub token scopes…"));
       try {
-        await runGhAuthInteractive(sub);
+        await runGhAuthInteractive("refresh");
         if (syncGitHubMcpInConfig(config)) saveConfig(config);
         console.log(chalk.green("\n" + (await formatPostAuthMessage(config))));
       } catch (error) {
@@ -277,13 +315,22 @@ program.command("doctor").action(async () => {
   } catch {
     const config = loadConfig();
     if (config.github.token) ok("GitHub  token configured");
-    else warn("GitHub  no auth (run gitmentor auth)");
+    else warn("GitHub  no auth (run gitmentor login)");
   }
 
   const config = loadConfig();
   const status = await new LLMRouter(config).healthCheck();
   if (status.ok) ok(`LLM     ${config.llm.provider} — ${status.message}`);
   else warn(`LLM     ${config.llm.provider} — ${status.message}`);
+
+  for (const server of config.mcp.servers.filter((s) => s.enabled)) {
+    const script = server.args[0];
+    if (script?.endsWith(".js") && fs.existsSync(script)) {
+      ok(`MCP     ${server.name} server script found`);
+    } else if (script?.endsWith(".js")) {
+      warn(`MCP     ${server.name} script missing (${script}) — run gitmentor init`);
+    }
+  }
 });
 
 program
@@ -296,9 +343,7 @@ program
     const config = loadConfig();
 
     if (opts.signin || spec?.toLowerCase() === "signin") {
-      const { runOllamaSignIn } = await import("./model-picker.js");
-      const result = await runOllamaSignIn(config);
-      console.log(result.message.replace(/\*\*/g, ""));
+      await runLoginCli("ollama");
       return;
     }
 
@@ -317,14 +362,28 @@ program
     else if (opts.provider) args.push("provider", opts.provider);
     else if (spec) args.push(spec);
 
-    const { handleModelCommand } = await import("@git-mentor/llm");
+    const { ensureOllamaModel, handleModelCommand } = await import("@git-mentor/llm");
     const result = await handleModelCommand(config, args);
     if (result.changed) {
       saveConfig(config);
-      const status = await new LLMRouter(config).healthCheck();
+      const ready = await ensureOllamaModel(config.llm, undefined, {
+        respectUserChoice: true,
+      });
+      if (ready.changed) {
+        config.llm.model = ready.model;
+        saveConfig(config);
+      }
       console.log(theme.success("Model updated"));
       console.log(result.message.replace(/\*\*/g, ""));
-      console.log(theme.muted(status.ok ? status.message : status.message));
+      if (ready.model === config.llm.model) {
+        console.log(theme.muted(`Ollama ready (${ready.model})`));
+      } else {
+        console.log(
+          theme.muted(
+            `Saved ${config.llm.model}. Run \`gitmentor login ollama\` if this cloud model does not respond.`,
+          ),
+        );
+      }
     } else {
       console.log(result.message.replace(/\*\*/g, ""));
     }

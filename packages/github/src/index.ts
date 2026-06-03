@@ -37,8 +37,34 @@ export {
 } from "./scopes.js";
 export { formatFollowResultsMarkdown, parseFollowUserMcpResult } from "./follow.js";
 export type { FollowUserResult } from "./follow.js";
+export { listFollowing, formatFollowingListMarkdown, resolveGitHubLogin } from "./following.js";
+export type { ListFollowingResult, FollowingUserEntry } from "./following.js";
+export { listFollowers, formatFollowersListMarkdown } from "./followers.js";
+export type { ListFollowersResult, FollowerUserEntry } from "./followers.js";
+export {
+  getUser,
+  listUserRepositories,
+  getRepository,
+  getRepositoryFile,
+  listRepositoryCommits,
+  listRepositoryBranches,
+  listStarredRepositories,
+} from "./github-read.js";
+export { searchRepositories, searchCode, searchDiscussions } from "./github-search.js";
+export {
+  listDiscussions,
+  getDiscussion,
+  listDiscussionComments,
+  createDiscussion,
+  createDiscussionComment,
+  listMyDiscussions,
+  formatDiscussionsListMarkdown,
+  formatMyDiscussionsMarkdown,
+  parseRepoFromDiscussionSearchQuery,
+} from "./discussions.js";
 export {
   buildGithubMcpServerEntry,
   migrateGithubMcpServerIfLegacy,
   usesLegacyGithubMcpServer,
 } from "./mcp-setup.js";
+export { GITHUB_MCP_TOOL_DEFINITIONS, callGitHubMcpTool } from "./mcp-github-handlers.js";

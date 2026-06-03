@@ -2,8 +2,18 @@ import { execSync } from "node:child_process";
 import type { GitMentorConfig } from "@git-mentor/core";
 import { hasGitHubAuth } from "./auth.js";
 import { githubMcpServerScriptPath } from "./mcp-path.js";
+import { GITHUB_MCP_SHIPPED_TOOL_NAMES } from "./mcp-github-tool-definitions.js";
 
 export const GITHUB_MCP_SERVER_NAME = "github";
+
+/** Tools implemented by `mcp-github-server.ts`. */
+export const GITHUB_MCP_SHIPPED_TOOLS = GITHUB_MCP_SHIPPED_TOOL_NAMES;
+
+/** Reserved — issues/PR/code-review tools are out of scope for git-mentor. */
+export const GITHUB_MCP_PLANNED_TOOLS = [] as const;
+
+/** @deprecated Use {@link GITHUB_MCP_SHIPPED_TOOLS} */
+export const GITHUB_MCP_ACTION_TOOLS = GITHUB_MCP_SHIPPED_TOOLS;
 
 export function buildGithubMcpServerEntry() {
   return {
@@ -19,22 +29,6 @@ export function buildGithubMcpServerEntry() {
 
 /** @deprecated use buildGithubMcpServerEntry() */
 export const GITHUB_MCP_DEFAULT = buildGithubMcpServerEntry();
-
-/** Tools implemented by `mcp-github-server.ts` — use `/mcp tools github` to verify at runtime. */
-export const GITHUB_MCP_SHIPPED_TOOLS = ["fork_repository", "follow_user"] as const;
-
-/** Roadmap only — not exposed by git-mentor-github-mcp yet (see mcp/tools.md). */
-export const GITHUB_MCP_PLANNED_TOOLS = [
-  "search_repositories",
-  "create_repository",
-  "create_issue",
-  "create_pull_request",
-  "push_files",
-  "create_branch",
-] as const;
-
-/** @deprecated Use {@link GITHUB_MCP_SHIPPED_TOOLS} — kept for older imports. */
-export const GITHUB_MCP_ACTION_TOOLS = GITHUB_MCP_SHIPPED_TOOLS;
 
 const LEGACY_GITHUB_MCP_NPX = "@modelcontextprotocol/server-github";
 
@@ -77,7 +71,6 @@ export function isGitHubMcpEnabled(config: GitMentorConfig): boolean {
   return config.mcp.servers.some((server) => server.name === GITHUB_MCP_SERVER_NAME && server.enabled);
 }
 
-/** Register or enable the official GitHub MCP server when gh/token auth is available. */
 export function ensureGitHubMcpServer(config: GitMentorConfig): boolean {
   if (!hasGitHubAuth(config)) return false;
 
@@ -98,6 +91,12 @@ export function ensureGitHubMcpServer(config: GitMentorConfig): boolean {
 
   if (!existing.enabled) {
     existing.enabled = true;
+    return true;
+  }
+
+  const scriptPath = githubMcpServerScriptPath();
+  if (existing.args[0] !== scriptPath) {
+    existing.args = [scriptPath];
     return true;
   }
 

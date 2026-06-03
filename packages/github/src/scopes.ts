@@ -64,7 +64,7 @@ export function formatMissingFollowScopeMessage(scopes: string[]): string {
     "",
     "In gitmentor chat, run **`/auth refresh`** (or in a terminal: `gitmentor auth refresh`).",
     "",
-    "Approve the browser prompt, then run **`/follow apply`** or **`follow them`** again.",
+    "Approve the browser prompt, then run **`/follow apply`** again.",
   ].join("\n");
 }
 

@@ -1,28 +1,23 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { LLMConfig } from "@git-mentor/core";
-import { listOllamaLocalModels, listOllamaCloudModels, isCloudTag } from "./model-config.js";
+import {
+  listOllamaDownloadedModels,
+  listOllamaPublicCloudModels,
+  probeAccessibleCloudCatalogNames,
+} from "./model-config.js";
 import { getOllamaAuthStatus, signInToOllama } from "./ollama-auth.js";
+import { isCloudCatalogName, isCloudTag, resolveCloudModelTag } from "./ollama-tags.js";
+
+export { isCloudCatalogName, resolveCloudModelTag } from "./ollama-tags.js";
 
 const execFileAsync = promisify(execFile);
 
-const FALLBACK_MODELS = ["qwen3:8b", "gpt-oss:20b-cloud", "gpt-oss:120b-cloud"];
+const FALLBACK_MODELS = ["gpt-oss:20b-cloud", "qwen3:8b", "gpt-oss:120b-cloud"];
 
 export interface OllamaReadyResult {
   model: string;
   changed: boolean;
-}
-
-/** Map ollama.com catalog names to the tag Ollama actually runs. */
-export function resolveCloudModelTag(name: string): string {
-  if (name.endsWith(":cloud") || name.endsWith("-cloud")) return name;
-  if (name.includes(":")) return `${name}-cloud`;
-  return `${name}:cloud`;
-}
-
-export function isCloudCatalogName(name: string, cloudNames: string[]): boolean {
-  const base = name.replace(/:cloud$/, "").replace(/-cloud$/, "");
-  return cloudNames.includes(name) || cloudNames.includes(base);
 }
 
 async function probeModel(model: string, baseUrl: string): Promise<boolean> {
@@ -57,23 +52,35 @@ function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
 }
 
-function fallbackModels(local: string[]): string[] {
-  const downloaded = local.filter((name) => !isCloudTag(name));
-  const stubs = local.filter((name) => isCloudTag(name));
-  return unique([...downloaded, ...FALLBACK_MODELS, ...stubs]);
+async function fallbackModels(baseUrl: string, local: string[]): Promise<string[]> {
+  const auth = await getOllamaAuthStatus();
+  const probed =
+    auth.signedIn ? await probeAccessibleCloudCatalogNames(baseUrl) : [];
+  const cloudTags = probed.map((name) => resolveCloudModelTag(name));
+  return unique([...local, ...FALLBACK_MODELS, ...cloudTags]);
+}
+
+export interface EnsureOllamaModelOptions {
+  /**
+   * When true (user picked a model via `/model` or config), do not replace it with another
+   * fallback model if probing fails — only normalize cloud tags (e.g. `name` → `name:cloud`).
+   */
+  respectUserChoice?: boolean;
 }
 
 /** Ensure the configured Ollama model is runnable; pick a working fallback if needed. */
 export async function ensureOllamaModel(
   llm: LLMConfig,
   onStatus?: (message: string) => void,
+  options?: EnsureOllamaModelOptions,
 ): Promise<OllamaReadyResult> {
+  const respectUserChoice = options?.respectUserChoice ?? false;
   const model = llm.model;
   const baseUrl = llm.baseUrl;
 
   const [local, cloudRemote] = await Promise.all([
-    listOllamaLocalModels(baseUrl),
-    listOllamaCloudModels(),
+    listOllamaDownloadedModels(baseUrl),
+    listOllamaPublicCloudModels(),
   ]);
   const candidates = unique([
     model,
@@ -104,7 +111,14 @@ export async function ensureOllamaModel(
     }
   }
 
-  const fallbacks = fallbackModels(local);
+  if (respectUserChoice) {
+    onStatus?.(
+      `Model **${model}** is not reachable. Run \`gitmentor login ollama\` (or \`/login ollama\` in chat), then retry.`,
+    );
+    return { model, changed: false };
+  }
+
+  const fallbacks = await fallbackModels(baseUrl, local);
   for (const fallback of fallbacks) {
     if (await probeModel(fallback, baseUrl)) {
       return { model: fallback, changed: fallback !== model };

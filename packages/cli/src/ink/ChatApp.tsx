@@ -5,11 +5,14 @@ import { loadConfig, markModelConfigured, needsModelOnboarding } from "@git-ment
 import { ChatFooter } from "./ChatFooter.js";
 import { ChatMessageView, type ChatMessageRole } from "./ChatMessageView.js";
 import { Header } from "./Header.js";
+import { parseSlashLoginCommand } from "@git-mentor/core";
+import type { LoginTarget } from "@git-mentor/core";
 import { GitHubAuthView } from "./GitHubAuthView.js";
-import { ModelSelectView, SignInView, type ModelPickerResult } from "./ModelSelectView.js";
+import { LoginFlowView } from "./LoginFlowView.js";
+import { ModelSelectView, type ModelPickerResult } from "./ModelSelectView.js";
 import { RichText } from "./RichText.js";
 
-type View = "chat" | "model-select" | "signin" | "github-auth" | "model-onboarding";
+type View = "chat" | "model-select" | "login-flow" | "github-auth" | "model-onboarding";
 
 interface ChatMessage {
   id: string;
@@ -23,11 +26,6 @@ function isInteractiveModelCommand(line: string): boolean {
   const sub = parts[1]?.toLowerCase();
   if (!sub) return true;
   return sub === "pick" || sub === "list";
-}
-
-function isModelSignInCommand(line: string): boolean {
-  const parts = line.trim().slice(1).split(/\s+/);
-  return parts[0]?.toLowerCase() === "model" && parts[1]?.toLowerCase() === "signin";
 }
 
 function parseGitHubAuthCommand(line: string): "login" | "refresh" | null {
@@ -81,9 +79,15 @@ export function ChatApp(props: {
   });
   const [contextStats, setContextStats] = useState<ContextSnapshot>(() => session.getContextSnapshot());
   const [githubAuthAction, setGithubAuthAction] = useState<"login" | "refresh" | null>(null);
+  const [loginTarget, setLoginTarget] = useState<LoginTarget | null>(null);
 
   const refreshContextStats = useCallback(() => {
     setContextStats(session.getContextSnapshot());
+  }, [session]);
+
+  const refreshLlmInfo = useCallback(() => {
+    const next = session.getConfig().llm;
+    setLlmInfo({ provider: next.provider, model: next.model });
   }, [session]);
 
   useInput((_input, key) => {
@@ -106,11 +110,10 @@ export function ChatApp(props: {
         setProgress(null);
       });
     void session.ensureLlmReady().then(() => {
-      const next = session.getConfig().llm;
-      setLlmInfo({ provider: next.provider, model: next.model });
+      refreshLlmInfo();
       refreshContextStats();
     });
-  }, [session, refreshContextStats]);
+  }, [session, refreshContextStats, refreshLlmInfo]);
 
   useEffect(() => {
     if (!modelConfigured) return;
@@ -163,9 +166,19 @@ export function ChatApp(props: {
         return;
       }
 
-      if (isModelSignInCommand(trimmed)) {
+      const loginParsed = parseSlashLoginCommand(trimmed);
+      if (loginParsed === "invalid") {
         appendMessage(trimmed, "user");
-        setView("signin");
+        appendMessage(
+          "Usage: `/login` (GitHub + Ollama) · `/login gh` · `/login ollama`",
+          "assistant",
+        );
+        return;
+      }
+      if (loginParsed) {
+        appendMessage(trimmed, "user");
+        setLoginTarget(loginParsed);
+        setView("login-flow");
         return;
       }
 
@@ -197,6 +210,7 @@ export function ChatApp(props: {
             return;
           }
           appendMessage(reply.content, "assistant");
+          refreshLlmInfo();
           refreshContextStats();
           return;
         }
@@ -213,6 +227,7 @@ export function ChatApp(props: {
         }
         setStreaming(null);
         appendMessage(full, "assistant");
+        refreshLlmInfo();
         refreshContextStats();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Something went wrong.";
@@ -220,6 +235,7 @@ export function ChatApp(props: {
       } finally {
         setBusy(false);
         setProgress(null);
+        refreshLlmInfo();
         refreshContextStats();
       }
     },
@@ -237,11 +253,40 @@ export function ChatApp(props: {
   }
 
   if (view === "model-select") {
-    return <ModelSelectView config={session.getConfig()} onDone={handlePickerDone} />;
+    return (
+      <ModelSelectView
+        config={session.getConfig()}
+        onDone={handlePickerDone}
+        onRequestFullLogin={() => {
+          setLoginTarget("both");
+          setView("login-flow");
+        }}
+      />
+    );
   }
 
-  if (view === "signin") {
-    return <SignInView onDone={handlePickerDone} />;
+  if (view === "login-flow" && loginTarget) {
+    return (
+      <LoginFlowView
+        target={loginTarget}
+        onGitHubComplete={
+          loginTarget === "gh" || loginTarget === "both"
+            ? async () => {
+                const reply = await session.finalizeGitHubAuth("login");
+                refreshContextStats();
+                return reply.content;
+              }
+            : undefined
+        }
+        onDone={(result) => {
+          setView("chat");
+          setLoginTarget(null);
+          appendMessage(result.message, "assistant");
+          refreshLlmInfo();
+          refreshContextStats();
+        }}
+      />
+    );
   }
 
   if (view === "github-auth" && githubAuthAction) {

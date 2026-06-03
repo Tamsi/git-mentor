@@ -3,7 +3,10 @@ import { buildModelPickerItems, formatPickerLabel, SIGNIN_VALUE } from "./model-
 
 describe("buildModelPickerItems", () => {
   it("adds sign-in entry when cloud models exist and user is signed out", () => {
-    const items = buildModelPickerItems({ local: ["qwen3:8b"], cloud: ["gpt-oss:120b"] }, false);
+    const items = buildModelPickerItems(
+      { local: ["qwen3:8b"], registeredCloud: [], cloud: ["gpt-oss:120b"] },
+      false,
+    );
     expect(items[0]?.value).toBe(SIGNIN_VALUE);
     expect(items.map((item) => item.value)).toContain("gpt-oss:120b-cloud");
   });
@@ -14,10 +17,11 @@ describe("buildModelPickerItems", () => {
     );
   });
 
-  it("deduplicates cloud models already registered as local stubs", () => {
+  it("deduplicates cloud models already registered as stubs", () => {
     const items = buildModelPickerItems(
       {
-        local: ["qwen3:8b", "gpt-oss:120b-cloud"],
+        local: ["qwen3:8b"],
+        registeredCloud: ["gpt-oss:120b-cloud"],
         cloud: ["gpt-oss:120b", "gpt-oss:20b"],
       },
       true,
@@ -27,8 +31,13 @@ describe("buildModelPickerItems", () => {
     expect(values).toContain("gpt-oss:20b-cloud");
   });
 
-  it("labels cloud stubs as cloud, not local", () => {
-    const items = buildModelPickerItems({ local: ["glm-5.1:cloud"], cloud: [] }, true);
-    expect(items[0]?.hint).toBe("cloud");
+  it("lists registered cloud stubs separately from downloaded local models", () => {
+    const items = buildModelPickerItems(
+      { local: ["qwen3:8b"], registeredCloud: ["glm-5.1:cloud"], cloud: [] },
+      true,
+    );
+    const glm = items.find((item) => item.value === "glm-5.1:cloud");
+    expect(glm?.hint).toBe("cloud");
+    expect(items.find((item) => item.value === "qwen3:8b")?.hint).toBe("local");
   });
 });

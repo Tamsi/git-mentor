@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { RULES_DIR, SKILLS_DIR, MCP_TOOLS_FILE, ensureDirs } from "@git-mentor/core";
+import { writeMcpToolsReference } from "./mcp-tools-reference.js";
 
 const TEMPLATES_DIR = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -48,11 +49,8 @@ export function bootstrapAgentAssets(): { rulesCopied: number; skillsCopied: num
     }
   }
 
-  let mcpDocsCopied = 0;
-  const mcpToolsTemplate = path.join(TEMPLATES_DIR, "mcp", "tools.md");
-  if (copyIfMissing(mcpToolsTemplate, MCP_TOOLS_FILE)) {
-    mcpDocsCopied += 1;
-  }
+  writeMcpToolsReference(MCP_TOOLS_FILE, fs);
+  const mcpDocsCopied = 1;
 
   return { rulesCopied, skillsCopied, mcpDocsCopied };
 }
