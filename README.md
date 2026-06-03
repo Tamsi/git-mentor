@@ -1,128 +1,118 @@
-# git-mentor
+<p align="center">
+  <strong>git-mentor</strong><br/>
+  <sub>Evidence-backed GitHub career intelligence — chat-first, local-first</sub>
+</p>
 
-Evidence-backed GitHub career intelligence — **TypeScript/Node**, **chat-first**, **CLI**, **MCP**, and **Hugging Face Space**.
+<p align="center">
+  <a href="https://github.com/Tamsi/git-mentor"><img src="https://img.shields.io/badge/GitHub-Tamsi%2Fgit--mentor-24292f?style=for-the-badge&logo=github" alt="GitHub"></a>
+  <a href="https://www.npmjs.com/package/git-mentor"><img src="https://img.shields.io/npm/v/git-mentor?style=for-the-badge&color=D97757" alt="npm version"></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D20-3c873a?style=for-the-badge&logo=node.js&logoColor=white" alt="Node 20+">
+  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License MIT">
+</p>
 
-## Install
+**git-mentor** is a terminal coach for your GitHub presence: profile attractiveness, repo portfolio, social graph, and community discussions — with **evidence-only** advice (no invented stats or threads). It runs as an **Ink TUI**, ships a **bundled GitHub MCP server**, and exposes the same coaching brain to **Cursor** via MCP.
+
+Use **Ollama** locally, **Ollama cloud**, or **OpenRouter**. Switch models with `gitmentor model` or `/model` in chat — no lock-in to a single vendor.
+
+| | |
+| --- | --- |
+| **Real terminal UI** | Ink chat with streaming replies, slash commands, context bar, and a startup panel (model, MCP, skills). |
+| **GitHub-native actions** | Profile, README, pins, fork, follow, discussions — via `gh` auth and MCP tools (human confirmation for writes). |
+| **Coaching brain** | Rules + skills injected into every session (`gap-coaching`, profile optimization, repo deep-scan). |
+| **Out of scope** | Issues, PRs, merge/review automation, local git clone / disk deep scan. |
+
+---
+
+## Quick install
 
 Requires **Node.js 20+**.
 
-### From npm (recommended)
-
 ```bash
 npm install -g git-mentor
-```
-
-The CLI command is **`gitmentor`** (`git-mentor` remains available as an alias). Then configure Ollama:
-
-```bash
 gitmentor init --provider ollama --model gpt-oss:20b
-gitmentor doctor
+gitmentor login
+gitmentor
 ```
 
-### From source (development)
+From source:
 
 ```bash
-git clone <repo>
+git clone https://github.com/Tamsi/git-mentor.git
 cd git-mentor
 npm install -g .
-# postinstall runs pnpm install + build automatically
+# postinstall runs pnpm install + build
 ```
 
-Or manually:
+---
+
+## Getting started
 
 ```bash
-pnpm install
-pnpm build
-npm install -g .
+gitmentor              # Interactive chat (default: your GitHub user)
+gitmentor octocat      # Coach a public profile
+gitmentor login        # GitHub (gh) + Ollama cloud
+gitmentor login gh     # GitHub only
+gitmentor login ollama # Ollama cloud only
+gitmentor model        # Pick LLM model
+gitmentor auth         # GitHub token / scopes status
+gitmentor doctor       # Config, gh, LLM, MCP checks
+gitmentor init         # Rules, skills, tools.md, MCP entry
+gitmentor mcp          # Built-in MCP server for Cursor
 ```
 
-> **Note:** Prefer `npm install -g .` from the repo root (not `./packages/cli`) so runtime dependencies resolve correctly.
+With **`gh auth login`**, your profile dossier loads at startup and is cached under `~/.local/share/git-mentor/reports/<username>.md`.
 
-## Chat (primary interface)
+---
 
-### CLI chat
+## CLI vs chat quick reference
+
+| Action | Terminal (one-shot) | In chat |
+| --- | --- | --- |
+| Start coaching | `gitmentor` · `gitmentor chat @user` | (opens TUI) |
+| Refresh profile audit | `gitmentor analyze me` | `/analyze profile` |
+| Deep-scan a repo | `gitmentor analyze owner/repo` | `/analyze owner/repo` |
+| Change model | `gitmentor model` | `/model` |
+| Target role | `gitmentor me --role staff-engineer` | `/role <id>` |
+| Followers / following | — | `/followers` · `/following` |
+| Discussions | — | `/discussions` · `/discussions community` |
+| Apply profile writes | — | `/apply bio` · `/apply readme` · `/apply pin` |
+| Sign in | `gitmentor login [gh\|ollama]` | `/login` · `/login gh` |
+| Help | `gitmentor --help` | `/help` |
+| Quit | Ctrl+C | `/quit` · Esc (empty prompt) |
+
+---
+
+## Example questions
+
+- What are my biggest gaps for Staff Engineer?
+- Who follows me vs who do I follow?
+- What should I improve on my profile README?
+- Which threads are active on `community/community`?
+- Fork and follow suggestions after `/trending`
+
+---
+
+## GitHub MCP (~26 tools)
+
+Shipped on server `github` (auto-enabled when `gh` is authenticated):
+
+**Read / search:** `get_user`, `list_followers`, `list_following`, `list_user_repositories`, `get_repository`, `get_repository_file`, `list_repository_commits`, `list_repository_branches`, `list_starred_repositories`, `search_repositories`, `search_code`, `search_discussions`, discussion list/get/comments.
+
+**Write (own account only):** `update_user_profile`, `upsert_repository_file`, `update_repository_metadata`, `pin_repositories`, `fork_repository`, `follow_user`, `unfollow_user`, `create_repository`, `create_discussion`, `create_discussion_comment`.
+
+Reference: `~/.config/git-mentor/mcp/tools.md` (regenerated on `gitmentor init`).
 
 ```bash
-gitmentor                    # your GitHub profile (auto-loads with gh auth)
-gitmentor octocat            # public profile
-gitmentor me --role staff-engineer
-gitmentor chat octocat       # same as above (alias)
+gitmentor auth refresh   # scopes for follow / fork / private repos
 ```
 
-With **`gh auth login`**, your profile loads **automatically** at startup. The coaching dossier is written to `~/.local/share/git-mentor/reports/<username>.md` (JSON alongside) and cached for `cacheTtlHours` (default 24h).
-
-`/analyze profile` refreshes **profile attractiveness** (bio, README, pins, stats, activity) — not manifest/code scans (`/analyze <repo>` for those).
-
-Example questions:
-- « What are my biggest gaps for Staff Engineer? »
-- « What should I learn in the next 3 months? »
-- « Which OSS projects fit my stack? »
-
-Commands inside chat: `/analyze profile`, `/analyze <repo>`, `/role`, `/model`, `/gaps`, `/growth`, `/trending`, `/follow`, `/apply`, `/improve`, `/export`, `/help`, `/quit`
-
-**Apply changes on your GitHub** (requires `gh auth`, same account as the session):
-
-```bash
-gitmentor login              # GitHub + Ollama (default)
-gitmentor login gh           # GitHub only (gh)
-gitmentor login ollama       # Ollama cloud only
-gitmentor auth refresh       # extra GitHub scopes for fork/follow
-```
-
-In chat: `/login` (both) · `/login gh` · `/login ollama` · `/apply bio …` — Coaching another username is read-only.
-
-### Stack
-
-- **Commander.js** — CLI structure (`init`, `chat`, `model`, `analyze`, …)
-- **Ink + React** — interactive chat, model picker, Ollama sign-in
-- **ink-text-input**, **ink-select-input**, **ink-spinner** — terminal UI primitives
-- **Chalk** — colors for one-shot commands (`doctor`, `analyze`, …)
-
-```bash
-gitmentor login ollama       # Ollama cloud (or gitmentor login for GH + Ollama)
-gitmentor model              # interactive picker
-gitmentor model qwen3:8b     # set model directly
-gitmentor model --list       # plain text list
-```
-
-In chat: `/login` · `/login ollama` · `/model` — same flows without leaving gitmentor.
-
-Cloud models require **`gitmentor login ollama`** (or `/login ollama` in chat).
-
-### Local app (browser)
-
-```bash
-gitmentor app
-# → http://localhost:3847
-```
-
-## Setup
-
-```bash
-gitmentor init --provider ollama --model gpt-oss:20b
-gitmentor auth              # GitHub token status
-gitmentor auth login        # browser sign-in (gh)
-gitmentor auth refresh      # add user scope for follow
-gitmentor doctor
-```
-
-For natural conversation, use **Ollama** (local) or set `GIT_MENTOR_LLM_PROVIDER=openrouter`.
-
-Deterministic mode works for slash commands only: `gitmentor octocat --deterministic`
-
-## Other commands
-
-Legacy one-shot commands still available:
-
-```bash
-gitmentor analyze octocat --deterministic
-gitmentor eval
-gitmentor mcp    # MCP server for Cursor
-```
+---
 
 ## MCP (Cursor)
 
-**Built-in tools:** `analyze_profile`, `compare_role`, `get_recommendations`, `discover_trending_repos`, `discover_profiles_to_follow`, `improve_profile`, `analyze_repository`, `list_target_roles`, `list_rules`, `list_skills`, `get_agent_context`
+**Built-in git-mentor server** (`gitmentor mcp`):
+
+`analyze_profile`, `compare_role`, `get_recommendations`, `discover_trending_repos`, `discover_profiles_to_follow`, `improve_profile`, `analyze_repository`, `list_target_roles`, `list_rules`, `list_skills`, `get_agent_context`
 
 ```json
 {
@@ -135,55 +125,43 @@ gitmentor mcp    # MCP server for Cursor
 }
 ```
 
-## Rules, skills & agent context
+Enable the bundled **github** server in `~/.config/git-mentor/config.yaml` (or run `gitmentor init` after `gh auth login`).
 
-git-mentor injects **rules** and **skills** into the LLM system prompt (Cursor-style `SKILL.md`).
+---
+
+## Rules, skills & config
 
 | Location | Purpose |
-|----------|---------|
+| --- | --- |
+| `~/.config/git-mentor/config.yaml` | LLM, GitHub, MCP servers, active skills |
 | `~/.config/git-mentor/rules/*.md` | Global coaching rules |
-| `~/.config/git-mentor/skills/<id>/SKILL.md` | Global skills |
-| `.git-mentor/rules/` · `.git-mentor/skills/` | Project-level overrides |
+| `~/.config/git-mentor/skills/<id>/SKILL.md` | Procedural skills |
+| `.git-mentor/rules/` · `.git-mentor/skills/` | Project overrides |
 
 ```bash
-gitmentor init   # installs default GitHub-focused rules + skills
+gitmentor init
 ```
 
-**Default rules:** `github-evidence-only`, `github-career-mission`, `github-signals`
+In chat: `/rules`, `/skills`, `/skills use repo-deep-scan`, `/mcp`, `/export`
 
-**Default skills:** `gap-coaching`, `github-profile-optimization`, `repo-deep-scan`, `growth-and-trending`, `interview-prep` (active by default: `gap-coaching`, `github-profile-optimization`)
+---
 
-**Chat commands:** `/rules`, `/skills`, `/skills use repo-deep-scan`, `/mcp`, `/auth`, `/auth login`, `/auth refresh`
+## Local app (browser)
 
-**Config** (`~/.config/git-mentor/config.yaml`):
-
-With **`gh auth login`**, gitmentor **auto-enables a GitHub MCP server** (bundled in `@git-mentor/github`) for write actions: `fork_repository`, `follow_user`, etc. Career coaching stays in git-mentor MCP; GitHub operations go through GitHub MCP.
-
-```yaml
-mcp:
-  servers:
-    - name: github
-      command: node
-      args: ["…/node_modules/@git-mentor/github/dist/mcp-github-server.js"]
-      enabled: true   # auto-enabled when gh auth is detected
+```bash
+gitmentor app
+# → http://localhost:3847
 ```
 
-Chat shortcuts:
-- `/fork owner/repo` or `fork reponame` (after `/trending`) → MCP `fork_repository`
-- `/follow` then `/follow apply` or `follow those profiles` → MCP `follow_user`
-
-If follow fails with scope errors: `/auth refresh` in chat or `gitmentor auth refresh`
-
-**MCP tools reference:** `~/.config/git-mentor/mcp/tools.md` (installed by `gitmentor init`) — built-in vs `github` server, scopes, chat shortcuts.
-
-See `packages/cli/templates/agent/mcp/servers.example.json` for a starter MCP config.
+---
 
 ## Monorepo
 
 ```
 packages/core · github · llm · agents · chat · cli
-apps/space   — HF demo (Docker)
 ```
+
+---
 
 ## Development
 
@@ -194,6 +172,8 @@ pnpm test
 pnpm --filter git-mentor dev octocat --deterministic
 ```
 
+---
+
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE).

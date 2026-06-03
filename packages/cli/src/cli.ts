@@ -18,6 +18,7 @@ import chalk from "chalk";
 import { Command } from "commander";
 import { bootstrapAgentAssets } from "./agent-bootstrap.js";
 import { ensureGitHubMcpServer } from "@git-mentor/github";
+import { printTerminalBanner } from "./ui/banner.js";
 import { theme } from "./ui/theme.js";
 import {
   isGitMentorSubcommand,
@@ -131,6 +132,7 @@ program
   .option("--base-url <url>", "LLM base URL", "http://localhost:11434")
   .option("--role <role>", "Default target role", "ai-engineer")
   .action((opts: { provider: string; model: string; baseUrl: string; role: string }) => {
+    printTerminalBanner({ subtitle: "Initialize config, rules, skills, and MCP" });
     ensureDirs();
     const config = loadConfig();
     config.llm.provider = opts.provider;
@@ -303,6 +305,8 @@ program
   });
 
 program.command("doctor").action(async () => {
+  const config = loadConfig();
+  printTerminalBanner({ subtitle: "Environment check", config });
   const ok = (label: string) => console.log(`${theme.muted(label)} ${theme.success("✓")}`);
   const warn = (label: string) => console.log(`${theme.muted(label)} ${theme.brand("!")}`);
 
@@ -318,7 +322,6 @@ program.command("doctor").action(async () => {
     else warn("GitHub  no auth (run gitmentor login)");
   }
 
-  const config = loadConfig();
   const status = await new LLMRouter(config).healthCheck();
   if (status.ok) ok(`LLM     ${config.llm.provider} — ${status.message}`);
   else warn(`LLM     ${config.llm.provider} — ${status.message}`);

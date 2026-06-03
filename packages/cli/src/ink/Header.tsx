@@ -1,7 +1,5 @@
 import React from "react";
-import { Box, Text } from "ink";
-import { colors, LOGO } from "../ui/colors.js";
-import { TipsBox } from "./TipsBox.js";
+import { StartupPanel } from "./StartupPanel.js";
 
 export function Header(props: {
   username: string;
@@ -9,25 +7,9 @@ export function Header(props: {
   provider: string;
   model: string;
   profileLoaded: boolean;
+  githubMcpEnabled: boolean;
+  activeSkills: number;
+  totalSkills: number;
 }) {
-  return (
-    <Box flexDirection="column" marginBottom={1}>
-      {LOGO.map((line) => (
-        <Text key={line} color={colors.brand}>
-          {line}
-        </Text>
-      ))}
-      <Text color={colors.muted}>
-        {" "}
-        @{props.username} · {props.roleId} · {props.provider}/{props.model}
-        {props.profileLoaded ? " · profile loaded" : " · profile not loaded"}
-      </Text>
-      <TipsBox>
-        <Text>
-          <Text color={colors.brand}>{"> "}</Text>
-          /model · /gaps · /growth · /follow · /help
-        </Text>
-      </TipsBox>
-    </Box>
-  );
+  return <StartupPanel {...props} />;
 }

@@ -119,6 +119,10 @@ export class ChatSession {
     this.agentBundle = loadAgentContext(this.config);
   }
 
+  getAgentBundle(): AgentContextBundle {
+    return this.agentBundle;
+  }
+
   private getAgentPromptSection(): string {
     return formatAgentContextForPrompt(this.agentBundle, this.config);
   }

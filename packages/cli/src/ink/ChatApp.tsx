@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Box, useApp, useInput } from "ink";
 import { ChatSession, type ContextSnapshot } from "@git-mentor/chat";
 import { loadConfig, markModelConfigured, needsModelOnboarding } from "@git-mentor/core";
+import { isGitHubMcpEnabled } from "@git-mentor/github";
 import { ChatFooter } from "./ChatFooter.js";
 import { ChatMessageView, type ChatMessageRole } from "./ChatMessageView.js";
 import { Header } from "./Header.js";
@@ -320,6 +321,9 @@ export function ChatApp(props: {
         provider={llmInfo.provider || llm.provider}
         model={llmInfo.model || llm.model}
         profileLoaded={contextStats.profileLoaded}
+        githubMcpEnabled={isGitHubMcpEnabled(session.getConfig())}
+        activeSkills={session.getConfig().agent.activeSkills.length}
+        totalSkills={session.getAgentBundle().skills.length}
       />
 
       <Box flexDirection="column" marginBottom={1} flexGrow={1}>

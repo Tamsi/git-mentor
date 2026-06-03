@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import { loadConfig, saveConfig, type LoginTarget, parseLoginTargetArg } from "@git-mentor/core";
+import { printTerminalBanner } from "./ui/banner.js";
 import { theme } from "./ui/theme.js";
 
 /** First positional arg that is a subcommand name, not a GitHub username. */
@@ -74,6 +75,11 @@ export async function runLoginCli(targetArg?: string): Promise<void> {
     process.exitCode = 1;
     return;
   }
+
+  printTerminalBanner({
+    subtitle: `Sign in: ${target === "both" ? "GitHub + Ollama" : target}`,
+    config: loadConfig(),
+  });
 
   const total = target === "both" ? 2 : 1;
   let index = 0;
