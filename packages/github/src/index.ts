@@ -68,3 +68,5 @@ export {
   usesLegacyGithubMcpServer,
 } from "./mcp-setup.js";
 export { GITHUB_MCP_TOOL_DEFINITIONS, callGitHubMcpTool } from "./mcp-github-handlers.js";
+export { GitHubRestClient } from "./github-rest.js";
+export { GitHubWriteClient } from "./github-write.js";

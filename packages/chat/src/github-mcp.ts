@@ -1,21 +1,22 @@
 import type { GitMentorConfig, TrendingRepo } from "@git-mentor/core";
 import { loadMcpToolsDoc } from "@git-mentor/core";
 import {
-  GITHUB_MCP_SERVER_NAME,
   GITHUB_MCP_SHIPPED_TOOLS,
+  formatDiscussionsListMarkdown,
   formatFollowResultsMarkdown,
   formatFollowingListMarkdown,
   formatFollowersListMarkdown,
-  formatDiscussionsListMarkdown,
   formatMyDiscussionsMarkdown,
   isGitHubMcpEnabled,
-  type ListFollowersResult,
+  listDiscussions,
+  listMyDiscussions,
   parseFollowUserMcpResult,
   type FollowUserResult,
+  type ListFollowersResult,
   type ListFollowingResult,
 } from "@git-mentor/github";
 import { stripAtUsername } from "./command-utils.js";
-import { callExternalMcpTool } from "./mcp-client.js";
+import { formatGithubToolResult, invokeGithubTool } from "./github-tool-bridge.js";
 
 function stripGithubComUrl(value: string): string {
   const trimmed = value.trim();
@@ -57,56 +58,39 @@ export function resolveForkTarget(
   return null;
 }
 
+async function githubTool<T>(
+  config: GitMentorConfig,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<T> {
+  return (await invokeGithubTool(config, name, args)) as T;
+}
+
 export async function forkRepositoryViaGitHubMcp(
   config: GitMentorConfig,
   owner: string,
   repo: string,
 ): Promise<string> {
-  if (!isGitHubMcpEnabled(config)) {
-    throw new Error(
-      "GitHub MCP is not enabled. Run **`/auth login`** or enable the github server in config.yaml.",
-    );
-  }
-
-  return callExternalMcpTool(config, GITHUB_MCP_SERVER_NAME, "fork_repository", { owner, repo });
+  const result = await githubTool(config, "fork_repository", { owner, repo });
+  return formatGithubToolResult(result);
 }
 
 export async function listFollowingViaGitHubMcp(
   config: GitMentorConfig,
   username?: string,
 ): Promise<ListFollowingResult> {
-  if (!isGitHubMcpEnabled(config)) {
-    throw new Error(
-      "GitHub MCP is not enabled. Run **`gitmentor login`** or **`/auth login`**, then retry.",
-    );
-  }
-
-  const raw = await callExternalMcpTool(config, GITHUB_MCP_SERVER_NAME, "list_following", {
+  return githubTool(config, "list_following", {
     ...(username ? { username: stripAtUsername(username) } : {}),
   });
-  if (typeof raw === "string") {
-    return JSON.parse(raw) as ListFollowingResult;
-  }
-  return raw as ListFollowingResult;
 }
 
 export async function listFollowersViaGitHubMcp(
   config: GitMentorConfig,
   username?: string,
 ): Promise<ListFollowersResult> {
-  if (!isGitHubMcpEnabled(config)) {
-    throw new Error(
-      "GitHub MCP is not enabled. Run **`gitmentor login`** or **`/auth login`**, then retry.",
-    );
-  }
-
-  const raw = await callExternalMcpTool(config, GITHUB_MCP_SERVER_NAME, "list_followers", {
+  return githubTool(config, "list_followers", {
     ...(username ? { username: stripAtUsername(username) } : {}),
   });
-  if (typeof raw === "string") {
-    return JSON.parse(raw) as ListFollowersResult;
-  }
-  return raw as ListFollowersResult;
 }
 
 export function formatFollowersMcpMarkdown(result: ListFollowersResult | string): string {
@@ -120,71 +104,30 @@ export function formatFollowersMcpMarkdown(result: ListFollowersResult | string)
   return formatFollowersListMarkdown(result);
 }
 
-type ListDiscussionsMcpResult = {
-  owner: string;
-  repo: string;
-  discussions: Array<{
-    number: number;
-    title: string;
-    url: string;
-    category?: string;
-    author?: string;
-    updatedAt?: string;
-  }>;
-};
-
-type ListMyDiscussionsMcpResult = {
-  username: string;
-  reposScanned: number;
-  discussions: Array<{
-    number: number;
-    title: string;
-    url: string;
-    owner: string;
-    repo: string;
-    category?: string;
-    updatedAt?: string;
-  }>;
-};
-
-function parseMcpJson<T>(raw: string): T {
-  return JSON.parse(raw) as T;
-}
-
 export async function listDiscussionsRepoMarkdown(
   config: GitMentorConfig,
   owner: string,
   repo: string,
   first = 15,
 ): Promise<string> {
-  if (!isGitHubMcpEnabled(config)) {
-    throw new Error(
-      "GitHub MCP is not enabled. Run **`gitmentor login`** or **`/auth login`**, then retry.",
-    );
-  }
-  const raw = await callExternalMcpTool(config, GITHUB_MCP_SERVER_NAME, "list_discussions", {
-    owner,
-    repo,
-    first,
-  });
-  return formatDiscussionsListMarkdown(parseMcpJson<ListDiscussionsMcpResult>(raw));
+  const data = await githubTool<Awaited<ReturnType<typeof listDiscussions>>>(
+    config,
+    "list_discussions",
+    { owner, repo, first },
+  );
+  return formatDiscussionsListMarkdown(data);
 }
 
 export async function listMyDiscussionsMarkdown(
   config: GitMentorConfig,
   username: string,
 ): Promise<string> {
-  if (!isGitHubMcpEnabled(config)) {
-    throw new Error(
-      "GitHub MCP is not enabled. Run **`gitmentor login`** or **`/auth login`**, then retry.",
-    );
-  }
-  const raw = await callExternalMcpTool(config, GITHUB_MCP_SERVER_NAME, "list_my_discussions", {
-    username,
-    max_repos: 10,
-    per_repo: 5,
-  });
-  return formatMyDiscussionsMarkdown(parseMcpJson<ListMyDiscussionsMcpResult>(raw));
+  const data = await githubTool<Awaited<ReturnType<typeof listMyDiscussions>>>(
+    config,
+    "list_my_discussions",
+    { username, max_repos: 10, per_repo: 5 },
+  );
+  return formatMyDiscussionsMarkdown(data);
 }
 
 export function formatFollowingMcpMarkdown(result: ListFollowingResult | string): string {
@@ -202,16 +145,10 @@ export async function followUserViaGitHubMcp(
   config: GitMentorConfig,
   username: string,
 ): Promise<FollowUserResult> {
-  if (!isGitHubMcpEnabled(config)) {
-    throw new Error(
-      "GitHub MCP is not enabled. Run **`/auth login`** or enable the github server in config.yaml.",
-    );
-  }
-
-  const raw = await callExternalMcpTool(config, GITHUB_MCP_SERVER_NAME, "follow_user", {
+  const result = await githubTool(config, "follow_user", {
     username: stripAtUsername(username),
   });
-  return parseFollowUserMcpResult(raw, stripAtUsername(username));
+  return parseFollowUserMcpResult(formatGithubToolResult(result), stripAtUsername(username));
 }
 
 export async function followProfilesViaGitHubMcp(

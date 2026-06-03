@@ -1,11 +1,7 @@
 import type { GitMentorConfig } from "@git-mentor/core";
-import {
-  GITHUB_MCP_SERVER_NAME,
-  isGitHubMcpEnabled,
-  resolveAuthenticatedUsername,
-} from "@git-mentor/github";
+import { isGitHubMcpEnabled, resolveAuthenticatedUsername } from "@git-mentor/github";
 import { stripAtUsername } from "./command-utils.js";
-import { callExternalMcpTool } from "./mcp-client.js";
+import { formatGithubToolResult, invokeGithubTool } from "./github-tool-bridge.js";
 import { formatToolResult } from "./prompts.js";
 import type { ChatReply } from "./types.js";
 
@@ -36,9 +32,9 @@ export async function applyBio(
   bio: string,
 ): Promise<ChatReply> {
   await assertCanWriteGitHub(config, sessionUsername);
-  const raw = await callExternalMcpTool(config, GITHUB_MCP_SERVER_NAME, "update_user_profile", {
-    bio,
-  });
+  const raw = formatGithubToolResult(
+    await invokeGithubTool(config, "update_user_profile", { bio }),
+  );
   return {
     content: formatToolResult("GitHub profile updated", `Bio applied for @${sessionUsername}.\n\n${raw}`),
     toolUsed: "apply-bio",
@@ -62,13 +58,15 @@ export async function applyReadme(
     }
   }
 
-  const raw = await callExternalMcpTool(config, GITHUB_MCP_SERVER_NAME, "upsert_repository_file", {
-    owner,
-    repo,
-    path: "README.md",
-    content,
-    message: "Update README via gitmentor",
-  });
+  const raw = formatGithubToolResult(
+    await invokeGithubTool(config, "upsert_repository_file", {
+      owner,
+      repo,
+      path: "README.md",
+      content,
+      message: "Update README via gitmentor",
+    }),
+  );
   return {
     content: formatToolResult(
       "README committed",
@@ -84,9 +82,9 @@ export async function applyPin(
   repositories: string[],
 ): Promise<ChatReply> {
   await assertCanWriteGitHub(config, sessionUsername);
-  const raw = await callExternalMcpTool(config, GITHUB_MCP_SERVER_NAME, "pin_repositories", {
-    repositories,
-  });
+  const raw = formatGithubToolResult(
+    await invokeGithubTool(config, "pin_repositories", { repositories }),
+  );
   return {
     content: formatToolResult("Pinned repositories", raw),
     toolUsed: "apply-pin",

@@ -18,7 +18,6 @@ export const GITMENTOR_SUBCOMMANDS = new Set([
   "model",
   "mcp",
   "chat",
-  "app",
   "eval",
   "help",
 ]);

@@ -27,16 +27,15 @@ import { formatToolResult, NEED_ANALYSIS_MESSAGE } from "./prompts.js";
 import { formatCommandError, isProfileAnalyzeTarget, stripAtUsername } from "./command-utils.js";
 import { runFollowProfilesOnGitHub, stripGitHubUsername } from "./github-follow.js";
 import {
+  formatFollowersMcpMarkdown,
   formatFollowingMcpMarkdown,
+  listDiscussionsRepoMarkdown,
+  listFollowersViaGitHubMcp,
   listFollowingViaGitHubMcp,
+  listMyDiscussionsMarkdown,
 } from "./github-mcp.js";
 import { handleGitHubAuthCommand } from "./github-auth.js";
-import {
-  formatFollowersMcpMarkdown,
-  listDiscussionsRepoMarkdown,
-  listMyDiscussionsMarkdown,
-  listFollowersViaGitHubMcp,
-} from "./github-mcp.js";
+import { formatGithubToolResult, invokeGithubTool } from "./github-tool-bridge.js";
 import { APPLY_USAGE, applyBio, applyPin, applyReadme } from "./github-apply.js";
 import type { ChatReply, ProgressCallback } from "./types.js";
 
@@ -265,12 +264,14 @@ const handlers: Record<string, CommandHandler> = {
         };
       }
       try {
-        const raw = await callExternalMcpTool(ctx.config, "github", "create_discussion", {
-          owner,
-          repo,
-          title,
-          body: bodyPart,
-        });
+        const raw = formatGithubToolResult(
+          await invokeGithubTool(ctx.config, "create_discussion", {
+            owner,
+            repo,
+            title,
+            body: bodyPart,
+          }),
+        );
         return { content: formatToolResult("Discussion created", raw), toolUsed: "discuss" };
       } catch (error) {
         return { content: formatCommandError(error), toolUsed: "discuss" };
@@ -290,12 +291,14 @@ const handlers: Record<string, CommandHandler> = {
         };
       }
       try {
-        const raw = await callExternalMcpTool(ctx.config, "github", "create_discussion_comment", {
-          owner: match[1]!,
-          repo: match[2]!,
-          discussion_number: Number(match[3]),
-          body,
-        });
+        const raw = formatGithubToolResult(
+          await invokeGithubTool(ctx.config, "create_discussion_comment", {
+            owner: match[1]!,
+            repo: match[2]!,
+            discussion_number: Number(match[3]),
+            body,
+          }),
+        );
         return { content: formatToolResult("Comment posted", raw), toolUsed: "discuss" };
       } catch (error) {
         return { content: formatCommandError(error), toolUsed: "discuss" };
@@ -553,7 +556,11 @@ const handlers: Record<string, CommandHandler> = {
       }
       try {
         onProgress?.(`Calling ${args[1]}.${args[2]}…`);
-        const result = await callExternalMcpTool(ctx.config, args[1]!, args[2]!, parsed);
+        const server = args[1]!.toLowerCase();
+        const result =
+          server === "github"
+            ? formatGithubToolResult(await invokeGithubTool(ctx.config, args[2]!, parsed))
+            : await callExternalMcpTool(ctx.config, args[1]!, args[2]!, parsed);
         return {
           content: formatToolResult(`MCP ${args[1]}.${args[2]}`, result),
           toolUsed: "mcp",

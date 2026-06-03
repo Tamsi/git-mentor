@@ -155,15 +155,6 @@ In chat: `/rules`, `/skills`, `/skills use repo-deep-scan`, `/mcp`, `/export`
 
 ---
 
-## Local app (browser)
-
-```bash
-gitmentor app
-# → http://localhost:3847
-```
-
----
-
 ## Monorepo
 
 ```

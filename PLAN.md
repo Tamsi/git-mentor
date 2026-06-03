@@ -1,6 +1,6 @@
 # git-mentor — Roadmap
 
-Evidence-backed GitHub career intelligence. This document sequences work from the current **v0.1** monorepo toward a stable product: CLI, MCP, browser app, and GitHub community workflows (Discussions).
+Evidence-backed GitHub career intelligence. This document sequences work from the current **v0.1** monorepo toward a stable product: CLI, MCP, and GitHub community workflows (Discussions).
 
 **Current baseline (done):**
 
@@ -12,10 +12,9 @@ Evidence-backed GitHub career intelligence. This document sequences work from th
 | GitHub + MCP | `packages/github` | ~26 tools: profile, repos, search, social graph, discussions, writes |
 | LLM | `packages/llm` | Ollama, OpenRouter, model config |
 | Core config | `packages/core` | `~/.config/git-mentor`, rules, skills |
-| Minimal browser UI | `packages/chat/src/server.ts` | `gitmentor app` → localhost:3847, embedded HTML |
 | npm global | root `package.json` | `gitmentor` / `git-mentor` binaries |
 
-**Out of scope (removed from roadmap):** Hugging Face Spaces, Hub datasets, and any `apps/space` demo path. Delete or archive `apps/space` when cleaning the monorepo.
+**Out of scope (removed from roadmap):** Browser/web app (`gitmentor app`), Hugging Face Spaces, Hub datasets, and any `apps/space` demo path.
 
 ---
 
@@ -23,15 +22,14 @@ Evidence-backed GitHub career intelligence. This document sequences work from th
 
 One coaching brain (`@git-mentor/chat` + `@git-mentor/agents`) exposed through:
 
-1. **Terminal** — fast, local-first, power users  
-2. **App** — approachable UI for reports, history, and GitHub actions  
-3. **MCP** — Cursor / IDE agents with the same tools and evidence rules  
-4. **GitHub account control** — authenticated writes (profile, repo files, metadata, pins) with human confirmation  
-5. **GitHub Discussions** — list, read, and participate in forum threads (including `community/community`)
+1. **Terminal** — fast, local-first, power users (Ink TUI)  
+2. **MCP** — Cursor / IDE agents with the same tools and evidence rules  
+3. **GitHub account control** — authenticated writes (profile, repo files, metadata, pins) with human confirmation  
+4. **GitHub Discussions** — list, read, and participate in forum threads (including `community/community`)
 
 All surfaces share config, cache (`~/.local/share/git-mentor/reports/`), rules/skills, and deterministic slash commands where possible.
 
-**Out of scope:** Issues, pull requests, merge/code-review automation, local git clone/deep scan on disk.
+**Out of scope:** Browser/web UI, issues, pull requests, merge/code-review automation, local git clone/deep scan on disk.
 
 **Product principle:** gitmentor acts on **your** GitHub only when `gh auth` matches the coached username; coaching someone else stays read-only.
 
@@ -72,8 +70,6 @@ All surfaces share config, cache (`~/.local/share/git-mentor/reports/`), rules/s
 - [ ] `push_files` — multi-file commit in one tool  
 - [ ] Chat: natural-language “apply this README” → preview + confirm (without manual `/apply`)  
 - [ ] Integration tests for MCP write + discussion tools (mocked fetch)  
-- [ ] App gitmentor: write preview + Apply button  
-
 **Explicitly not planned:** `create_issue`, `create_pull_request`, merge, code review, local git clone/deep scan.
 
 **Exit criteria:** `tools.md` matches shipped tools; `/followers` vs `/following` never confused in eval.
@@ -130,57 +126,11 @@ Prefer **REST** ([Discussions API](https://docs.github.com/en/rest/using-the-res
 - Suggest draft replies (user confirms before MCP `create_discussion_comment`)  
 - Recommend new discussion categories or pinned guidance posts for OSS credibility  
 
-### 2.4 App gitmentor (preview)
-
-- [ ] Discussions inbox: repo filter, sort by updated, unread-style markers from cached API snapshots  
-- [ ] Composer: new discussion / reply with preview → confirm → MCP call  
-
 **Exit criteria:** From chat, user can list discussions on a coached repo, read thread + comments, create a discussion and post a comment via MCP; scopes and errors documented in `tools.md`.
 
 ---
 
-## Phase 3 — App gitmentor (`apps/gitmentor`)
-
-**Goal:** Replace the embedded HTML prototype with a first-class web client that reuses `@git-mentor/chat` and matches CLI capabilities (including Discussions inbox from Phase 2).
-
-### 3.1 Architecture
-
-```
-apps/gitmentor/          # Vite or Next.js SPA + API routes (or thin BFF)
-  └── talks to           @git-mentor/chat (session API)
-                         @git-mentor/core (config)
-                         optional: same HTTP server as today, extended routes
-```
-
-**Decision (recommended):** Keep a **single Node HTTP server** owned by `@git-mentor/chat/server` (or `apps/gitmentor/server`) so `gitmentor app` stays one command; the SPA is static assets served by that server. Avoid duplicating session logic in the frontend.
-
-### 3.2 MVP features (parity with CLI chat)
-
-- [ ] Session start: username, target role, welcome + context stats  
-- [ ] Message stream (SSE or WebSocket) for LLM replies  
-- [ ] Slash command palette or sidebar: `/analyze profile`, `/analyze <repo>`, `/role`, `/gaps`, `/export`, `/help`  
-- [ ] Report viewer: render cached dossier from `~/.local/share/git-mentor/reports/<user>.md`  
-- [ ] Settings panel: model provider, `cacheTtlHours`, read-only view of active rules/skills  
-
-### 3.3 MVP+ (differentiators vs terminal)
-
-- [ ] GitHub auth status + link to `auth login` flow (or instructions + deep link to `gh`)  
-- [ ] Trending / follow UI: table of suggested profiles/repos with one-click MCP actions (when scopes allow)  
-- [ ] **Discussions panel** (Phase 2): browse, reply, create — same MCP backend  
-- [ ] Dark/light theme aligned with GitHub-like tokens (current embedded UI is dark-only)  
-- [ ] Mobile-friendly layout (terminal chat is not)  
-
-### 3.4 Packaging
-
-- [ ] `gitmentor app` opens browser and serves `apps/gitmentor` build output  
-- [ ] `pnpm --filter @git-mentor/app dev` for local frontend dev with HMR  
-- [ ] Optional: `gitmentor app --open` flag (default true)  
-
-**Exit criteria:** A non-developer can coach a public profile end-to-end in the browser without using Ink; reports persist to the same cache path as CLI.
-
----
-
-## Phase 4 — CLI and chat UX polish
+## Phase 3 — CLI and chat UX polish
 
 **Goal:** Terminal remains the best surface for daily use.
 
@@ -194,7 +144,7 @@ apps/gitmentor/          # Vite or Next.js SPA + API routes (or thin BFF)
 
 ---
 
-## Phase 5 — Distribution (npm)
+## Phase 4 — Distribution (npm)
 
 **Goal:** Reliable installs and releases — no third-party demo host.
 
@@ -207,7 +157,7 @@ apps/gitmentor/          # Vite or Next.js SPA + API routes (or thin BFF)
 
 ---
 
-## Phase 6 — Quality, observability, and ecosystem
+## Phase 5 — Quality, observability, and ecosystem
 
 **Goal:** Trust for career advice (evidence-backed positioning).
 
@@ -227,11 +177,10 @@ apps/gitmentor/          # Vite or Next.js SPA + API routes (or thin BFF)
 flowchart LR
   P0[Phase 0 Stabilize] --> P1[Phase 1 GitHub MCP]
   P1 --> P2[Phase 2 Discussions polish]
-  P2 --> P3[Phase 3 App gitmentor]
-  P3 --> P4[Phase 4 CLI polish]
-  P1 --> P5[Phase 5 npm]
-  P3 --> P5
-  P5 --> P6[Phase 6 Quality]
+  P2 --> P3[Phase 3 CLI polish]
+  P1 --> P4[Phase 4 npm]
+  P3 --> P4
+  P4 --> P5[Phase 5 Quality]
 ```
 
 | Priority | Phase | Effort (rough) | User-visible win |
@@ -239,10 +188,9 @@ flowchart LR
 | P0 | Foundation | S | Reliable installs |
 | P1 | GitHub MCP | M | Profile, social, search, discussions (shipped) |
 | P2 | Discussions coaching | S–M | Prompt context, skills, aggregation caps |
-| P3 | **App gitmentor** | L | Browser product + discussions inbox |
-| P4 | CLI polish | M | Power-user retention |
-| P5 | npm releases | S | Distribution |
-| P6 | Quality | M | Credibility |
+| P3 | CLI polish | M | Power-user retention |
+| P4 | npm releases | S | Distribution |
+| P5 | Quality | M | Credibility |
 
 **Product scope (2026-06-03):** no issues/PR/merge, no local git clone or disk deep scan.
 
@@ -253,11 +201,9 @@ flowchart LR
 ```
 packages/
   core · github · llm · agents · chat · cli
-apps/
-  gitmentor/     # Web UI (Phase 3)
 ```
 
-`packages/chat` remains the **single source of truth** for session lifecycle; `apps/gitmentor` is presentation + routing only.
+`packages/chat` remains the **single source of truth** for session lifecycle; `packages/cli` is the Ink TUI entrypoint.
 
 `packages/github` owns **all** GitHub REST/MCP integrations (profile, repos, social, search, **discussions**).
 
@@ -265,14 +211,10 @@ apps/
 
 ---
 
-## Open decisions (resolve before Phase 3 build)
+## Open decisions
 
-1. **Framework:** Vite + React (align with Ink/React skills) vs Next.js (if SSR/marketing pages needed).  
-2. **Auth in browser:** subprocess `gh auth login` vs OAuth app vs “CLI-only auth, app read-only until token file exists”.  
-3. **Hosted app:** stay localhost-only vs optional public deployment (secrets, GitHub OAuth).  
-4. **LLM in browser:** never embed API keys; proxy via local server only (same as today).  
-5. **Discussions aggregation:** cap repos scanned per `/discussions` (e.g. top 10 pinned) to respect rate limits.  
-6. **Human-in-the-loop:** require explicit confirmation before every `create_discussion` / `create_discussion_comment` (default on).  
+1. **Discussions aggregation:** cap repos scanned per `/discussions` (e.g. top 10 pinned) to respect rate limits.  
+2. **Human-in-the-loop:** require explicit confirmation before every `create_discussion` / `create_discussion_comment` (default on).  
 
 ---
 
@@ -280,12 +222,12 @@ apps/
 
 | Metric | Target |
 |--------|--------|
-| `gitmentor eval` pass rate | ≥ 90% (Phase 6) |
-| npm weekly installs | Track after Phase 5 |
-| App session completion | User reaches exported report after `/analyze profile` |
+| `gitmentor eval` pass rate | ≥ 90% (Phase 5) |
+| npm weekly installs | Track after Phase 4 |
+| CLI session completion | User reaches exported report after `/analyze profile` |
 | MCP tool coverage | Documented `github` tools implemented (including discussions) |
 | Discussion engagement | User lists + replies on ≥1 repo without leaving gitmentor |
-| Time-to-first-coach | &lt; 5 min from `npm i -g` + `init` + `app` |
+| Time-to-first-coach | &lt; 5 min from `npm i -g` + `init` + `gitmentor` |
 
 ---
 
@@ -295,4 +237,4 @@ apps/
 - [packages/cli/templates/agent/mcp/tools.md](./packages/cli/templates/agent/mcp/tools.md) — MCP tool catalog (generated on `gitmentor init`)  
 - [GitHub REST — Discussions](https://docs.github.com/en/rest/using-the-rest-api/github-discussions)  
 
-*Last updated: 2026-06-03 — MCP github ~26 tools; no issues/PR/git-local in product.*
+*Last updated: 2026-06-03 — CLI + MCP only; no browser app, issues/PR, or git-local in product.*

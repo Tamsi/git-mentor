@@ -406,18 +406,6 @@ program
   });
 
 program
-  .command("app")
-  .description("Launch local chat app in the browser")
-  .option("--port <port>", "HTTP port", "3847")
-  .action(async (opts: { port: string }) => {
-    const { createChatServer } = await import("./app-server.js");
-    const { port, start } = createChatServer(Number(opts.port));
-    start();
-    console.log(chalk.green(`git-mentor app running at http://localhost:${port}`));
-    console.log(chalk.dim("Press Ctrl+C to stop."));
-  });
-
-program
   .command("eval")
   .option("--json", "Print JSON summary")
   .action(async (opts: { json?: boolean }) => {

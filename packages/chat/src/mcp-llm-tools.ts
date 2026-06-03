@@ -1,14 +1,13 @@
 import type { GitMentorConfig } from "@git-mentor/core";
 import {
   GITHUB_MCP_TOOL_DEFINITIONS,
-  GITHUB_MCP_SERVER_NAME,
   isGitHubMcpEnabled,
   resolveAuthenticatedUsername,
 } from "@git-mentor/github";
 import type { OllamaToolDefinition } from "@git-mentor/llm";
 import { runOllamaToolChat } from "@git-mentor/llm";
 import { stripAtUsername } from "./command-utils.js";
-import { callExternalMcpTool } from "./mcp-client.js";
+import { formatGithubToolResult, invokeGithubTool } from "./github-tool-bridge.js";
 import { formatToolResult } from "./prompts.js";
 
 const GITHUB_TOOL_NAMES = new Set(GITHUB_MCP_TOOL_DEFINITIONS.map((t) => t.name));
@@ -41,12 +40,8 @@ export function githubToolsForLlm(): OllamaToolDefinition[] {
   return toOllamaTools(GITHUB_MCP_TOOL_DEFINITIONS);
 }
 
-export async function canUseAnyMcpToolCalling(
-  config: GitMentorConfig,
-  sessionUsername: string,
-): Promise<boolean> {
-  return canUseGithubToolCalling(config, sessionUsername);
-}
+/** @deprecated Use {@link canUseGithubToolCalling} */
+export const canUseAnyMcpToolCalling = canUseGithubToolCalling;
 
 export async function chatWithMcpTools(options: {
   config: GitMentorConfig;
@@ -70,7 +65,8 @@ export async function chatWithMcpTools(options: {
       if (!GITHUB_TOOL_NAMES.has(name)) {
         throw new Error(`Unknown tool: ${name}`);
       }
-      return callExternalMcpTool(options.config, GITHUB_MCP_SERVER_NAME, name, args);
+      const payload = await invokeGithubTool(options.config, name, args);
+      return formatGithubToolResult(payload);
     },
   });
 
