@@ -11,6 +11,13 @@ import type { LoginTarget } from "@git-mentor/core";
 import { GitHubAuthView } from "./GitHubAuthView.js";
 import { LoginFlowView } from "./LoginFlowView.js";
 import { ModelSelectView, type ModelPickerResult } from "./ModelSelectView.js";
+import {
+  clearPromptHistoryDraft,
+  createPromptHistoryState,
+  navigatePromptHistory,
+  recordPromptSubmission,
+  type PromptHistoryState,
+} from "./prompt-history.js";
 import { RichText } from "./RichText.js";
 
 type View = "chat" | "model-select" | "login-flow" | "github-auth" | "model-onboarding";
@@ -71,6 +78,9 @@ export function ChatApp(props: {
   );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [promptHistory, setPromptHistory] = useState<PromptHistoryState>(() =>
+    createPromptHistoryState(),
+  );
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [streaming, setStreaming] = useState<string | null>(null);
@@ -91,8 +101,30 @@ export function ChatApp(props: {
     setLlmInfo({ provider: next.provider, model: next.model });
   }, [session]);
 
+  const handleInputChange = useCallback((value: string) => {
+    setInput(value);
+    setPromptHistory((prev) => clearPromptHistoryDraft(prev, value));
+  }, []);
+
+  const navigateHistory = useCallback(
+    (direction: "up" | "down") => {
+      const result = navigatePromptHistory(promptHistory, input, direction);
+      setPromptHistory(result.state);
+      setInput(result.input);
+    },
+    [input, promptHistory],
+  );
+
   useInput((_input, key) => {
     if (view !== "chat" || busy) return;
+    if (key.upArrow) {
+      navigateHistory("up");
+      return;
+    }
+    if (key.downArrow) {
+      navigateHistory("down");
+      return;
+    }
     if (key.escape && input === "") {
       exit();
     }
@@ -159,6 +191,7 @@ export function ChatApp(props: {
       const trimmed = line.trim();
       if (!trimmed || busy) return;
 
+      setPromptHistory((prev) => recordPromptSubmission(prev, trimmed));
       setInput("");
 
       if (isInteractiveModelCommand(trimmed)) {
@@ -343,7 +376,7 @@ export function ChatApp(props: {
         progress={progress}
         streaming={Boolean(streaming)}
         input={input}
-        onInputChange={setInput}
+        onInputChange={handleInputChange}
         onSubmit={submitLine}
       />
     </Box>

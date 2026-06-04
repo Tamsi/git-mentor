@@ -1,6 +1,6 @@
 {
   "name": "git-mentor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Evidence-backed GitHub career intelligence — chat, CLI, MCP, local-first.",
   "type": "module",
   "license": "MIT",
