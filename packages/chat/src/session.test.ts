@@ -250,5 +250,6 @@ describe("ChatSession", () => {
     expect(opening).toContain("@octocat");
     expect(opening).toContain("MLOps");
     expect(opening).toContain("/gaps");
+    expect(opening).toContain("pinned");
   });
 });

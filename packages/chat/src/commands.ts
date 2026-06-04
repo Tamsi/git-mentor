@@ -8,6 +8,7 @@ import {
   type AgentContextBundle,
   type AnalysisResult,
   type GitMentorConfig,
+  type ProfileImprovement,
   type TrendingRepo,
   ensureDirs,
   formatRulesList,
@@ -68,6 +69,8 @@ export interface CommandContext {
   runRepoAnalysis(repoArg: string, onProgress?: ProgressCallback): Promise<ChatReply>;
   runForkCommand(repoArg: string, onProgress?: ProgressCallback): Promise<ChatReply>;
   trendingReposForFork(): TrendingRepo[];
+  formatGrowthContent(fallbackBody: string, onProgress?: ProgressCallback): Promise<string>;
+  formatImproveContent(fallbackBody: string, items: ProfileImprovement[], onProgress?: ProgressCallback): Promise<string>;
 }
 
 type CommandHandler = (ctx: CommandContext, args: string[], onProgress?: ProgressCallback) => Promise<ChatReply>;
@@ -142,17 +145,20 @@ const handlers: Record<string, CommandHandler> = {
     };
   },
 
-  growth: async (ctx) => {
+  growth: async (ctx, _args, onProgress) => {
     const profileAnalysis = ctx.getProfileAnalysis();
     if (!profileAnalysis) return { content: NEED_ANALYSIS_MESSAGE };
     const recs = profileAnalysis.actionPlan?.recommendations ?? [];
-    const body = recs.map((r) => `- **${r.title}** [${r.effort}] — ${r.description}`).join("\n");
-    const tech = profileAnalysis.actionPlan?.technologiesToLearn.join(", ") ?? "";
+    const fallbackBody = [
+      recs.map((r) => `- **${r.title}** [${r.effort}] — ${r.description}`).join("\n") || "No recommendations yet.",
+      profileAnalysis.actionPlan?.technologiesToLearn.length
+        ? `\n\nLearn next: ${profileAnalysis.actionPlan.technologiesToLearn.join(", ")}`
+        : "",
+    ].join("");
+    onProgress?.("Personalizing growth plan…");
+    const body = await ctx.formatGrowthContent(fallbackBody, onProgress);
     return {
-      content: formatToolResult(
-        "Growth recommendations",
-        `${body || "No recommendations yet."}${tech ? `\n\nLearn next: ${tech}` : ""}`,
-      ),
+      content: formatToolResult("Growth recommendations", body),
       toolUsed: "growth",
     };
   },
@@ -410,7 +416,7 @@ const handlers: Record<string, CommandHandler> = {
     }
   },
 
-  improve: async (ctx) => {
+  improve: async (ctx, _args, onProgress) => {
     const profileAnalysis = ctx.getProfileAnalysis();
     if (!profileAnalysis) return { content: NEED_ANALYSIS_MESSAGE };
     const items =
@@ -420,8 +426,11 @@ const handlers: Record<string, CommandHandler> = {
         profileAnalysis.gapAnalysis,
         getGithubProfileData(profileAnalysis),
       );
+    const fallbackBody = formatProfileImprovementsMarkdown(items);
+    onProgress?.("Personalizing improvement plan…");
+    const body = await ctx.formatImproveContent(fallbackBody, items, onProgress);
     return {
-      content: formatToolResult("Profile improvement plan", formatProfileImprovementsMarkdown(items)),
+      content: formatToolResult("Profile improvement plan", body),
       toolUsed: "improve",
     };
   },

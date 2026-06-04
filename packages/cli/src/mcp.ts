@@ -139,9 +139,9 @@ server.tool(
     repo: z.string(),
   },
   async ({ owner, repo }) => {
-    const result = await pipeline.runRepo({ owner, repoName: repo });
+    const { analysis } = await pipeline.runRepo({ owner, repoName: repo });
     return {
-      content: [{ type: "text", text: formatRepoAnalysisMarkdown(result) }],
+      content: [{ type: "text", text: formatRepoAnalysisMarkdown(analysis) }],
     };
   },
 );
@@ -152,9 +152,9 @@ server.tool(
   { username: z.string(), repo: z.string() },
   async ({ username, repo }) => {
     const { owner, repo: repoName } = parseRepoTarget(repo, username.replace(/^@/, ""));
-    const result = await pipeline.runRepo({ owner, repoName });
+    const { analysis } = await pipeline.runRepo({ owner, repoName });
     return {
-      content: [{ type: "text", text: formatRepoAnalysisMarkdown(result) }],
+      content: [{ type: "text", text: formatRepoAnalysisMarkdown(analysis) }],
     };
   },
 );

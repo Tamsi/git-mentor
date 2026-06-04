@@ -139,7 +139,7 @@ export class CareerCoachAgent {
         `Improve this one-sentence career summary for a developer targeting ${role.name}:\n${summary}\nProfile: ${profile.summary}\nKeep under 40 words, factual.`,
         "You are a staff engineer writing concise career feedback.",
       );
-      if (llm.content.trim()) summary = llm.content.trim();
+      if (llm.content.trim() && llm.provider !== "deterministic") summary = llm.content.trim();
     } catch {
       // Rule-based gap summary remains when LLM is unavailable.
     }
@@ -283,14 +283,14 @@ export class AnalysisPipeline {
     owner: string;
     repoName: string;
     onProgress?: (message: string) => void;
-  }): Promise<import("@git-mentor/core").RepoAnalysisResult> {
+  }): Promise<{ analysis: import("@git-mentor/core").RepoAnalysisResult; repoData: GitHubProfileData["repos"][number] }> {
     const { analyzeRepository } = await import("./repo-analysis.js");
     const repo = await this.ingestor.fetchRepoForAnalysis(
       options.owner,
       options.repoName,
       options.onProgress,
     );
-    return analyzeRepository(options.owner, repo);
+    return { analysis: analyzeRepository(options.owner, repo), repoData: repo };
   }
 
   async run(options: {

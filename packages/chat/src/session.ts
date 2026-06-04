@@ -3,10 +3,15 @@ import {
   CoachingService,
   formatRepoAnalysisMarkdown,
   parseRepoTarget,
+  runProfileCoachLLM,
+  runRepoCoachLLM,
+  runGrowthCoachLLM,
+  runImproveCoachLLM,
 } from "@git-mentor/agents";
 import {
   type AnalysisResult,
   type GitMentorConfig,
+  type ProfileImprovement,
   type RepoAnalysisResult,
   type AgentContextBundle,
   type TrendingRepo,
@@ -33,7 +38,6 @@ import {
   formatToolResult,
   messagesForChat,
   NEED_ANALYSIS_MESSAGE,
-  OPENING_USER_PROMPT,
 } from "./prompts.js";
 import { buildContextSnapshot, type ContextSnapshot } from "./context-stats.js";
 import {
@@ -112,7 +116,31 @@ export class ChatSession {
       runRepoAnalysis: (repoArg, onProgress) => this.runRepoAnalysis(repoArg, onProgress),
       runForkCommand: (repoArg, onProgress) => this.runForkCommand(repoArg, onProgress),
       trendingReposForFork: () => this.trendingReposForFork(),
+      formatGrowthContent: (fallbackBody, onProgress) =>
+        this.formatGrowthContent(fallbackBody, onProgress),
+      formatImproveContent: (fallbackBody, items, onProgress) =>
+        this.formatImproveContent(fallbackBody, items, onProgress),
     };
+  }
+
+  async formatGrowthContent(fallbackBody: string, onProgress?: ProgressCallback): Promise<string> {
+    if (!this.profileAnalysis || this.config.llm.provider === "deterministic") {
+      return fallbackBody;
+    }
+    onProgress?.("Building growth plan with LLM…");
+    return runGrowthCoachLLM(this.router, this.profileAnalysis, this.roleId, fallbackBody);
+  }
+
+  async formatImproveContent(
+    fallbackBody: string,
+    items: ProfileImprovement[],
+    onProgress?: ProgressCallback,
+  ): Promise<string> {
+    if (!this.profileAnalysis || this.config.llm.provider === "deterministic") {
+      return fallbackBody;
+    }
+    onProgress?.("Building improvement plan with LLM…");
+    return runImproveCoachLLM(this.router, this.profileAnalysis, this.roleId, items, fallbackBody);
   }
 
   private reloadAgentContext(): void {
@@ -352,6 +380,8 @@ export class ChatSession {
         config: this.config,
         sessionUsername: this.username,
         messages,
+        commandContext: this.commandContext(),
+        onProgress,
         onToolStart: (name) => onProgress?.(`Tool: ${name}…`),
       });
     } else {
@@ -404,6 +434,8 @@ export class ChatSession {
         config: this.config,
         sessionUsername: this.username,
         messages,
+        commandContext: this.commandContext(),
+        onProgress,
         onToolStart: (name) => onProgress?.(`Tool: ${name}…`),
       });
       if (full) yield { type: "token", content: full };
@@ -437,34 +469,34 @@ export class ChatSession {
 
     onProgress?.("Building coaching brief…");
 
+    const fallbackOpening = buildDeterministicOpening(this.profileAnalysis, this.roleId);
+
     if (this.config.llm.provider === "deterministic") {
-      return buildDeterministicOpening(this.profileAnalysis, this.roleId);
+      return fallbackOpening;
     }
 
-    const systemPrompt = this.buildSessionSystemPrompt();
-
-    try {
-      await this.syncOllamaModel(onProgress);
-      const result = await this.router.chat([
-        { role: "system", content: systemPrompt },
-        { role: "user", content: OPENING_USER_PROMPT },
-      ]);
-      this.recordUsage(result.usage);
-      return result.content.trim() || buildDeterministicOpening(this.profileAnalysis, this.roleId);
-    } catch {
-      const opening = buildDeterministicOpening(this.profileAnalysis, this.roleId);
-      return `${opening}\n\n${formatLlmFallbackNote()}`;
-    }
+    const { opening } = await runProfileCoachLLM(
+      this.router,
+      this.profileAnalysis,
+      this.roleId,
+      fallbackOpening,
+    );
+    return opening;
   }
 
   async runRepoAnalysis(repoArg: string, onProgress?: ProgressCallback): Promise<ChatReply> {
     const { owner, repo } = parseRepoTarget(repoArg, this.username);
     const fullName = `${owner}/${repo}`;
     try {
-      const result = await this.pipeline.runRepo({ owner, repoName: repo, onProgress });
-      this.repoAnalyses.set(result.fullName.toLowerCase(), result);
+      const { analysis: scan, repoData } = await this.pipeline.runRepo({ owner, repoName: repo, onProgress });
+      const fallback = formatRepoAnalysisMarkdown(scan);
+      let body = fallback;
+      if (this.config.llm.provider !== "deterministic") {
+        body = await runRepoCoachLLM(this.router, owner, repoData, scan, this.roleId, fallback);
+      }
+      const stored: RepoAnalysisResult = { ...scan, summary: body };
+      this.repoAnalyses.set(stored.fullName.toLowerCase(), stored);
 
-      const body = formatRepoAnalysisMarkdown(result);
       this.history.push({ role: "assistant", content: body });
 
       return {

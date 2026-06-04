@@ -1,4 +1,5 @@
 import type { AnalysisResult, RepoAnalysisResult } from "@git-mentor/core";
+import { buildProfileFacts } from "@git-mentor/agents";
 import { listRoles } from "@git-mentor/core";
 import type { ChatMessage } from "@git-mentor/llm";
 
@@ -176,7 +177,8 @@ export function buildSystemPrompt(
     "- Cite specific repos, languages, or dependencies when making claims.",
     "- Be concise, actionable, and honest. Use bullet points for lists of recommendations.",
     "- When suggesting next steps, tie them to gaps or weaknesses in the data.",
-    "- If data is missing, say so and suggest /analyze or /role.",
+    "- If data is missing, say so and suggest /analyze profile or use analyze_profile tool.",
+    "- For gaps, growth, trending, profile refresh, or repo deep-scan: use coaching tools (analyze_profile, get_career_gaps, discover_trending_repos, analyze_repository, …) — do not guess from memory alone.",
     "- You can reference slash commands (/gaps, /growth, /export) when helpful.",
     "- Follow any USER RULES and ACTIVE SKILLS sections when present.",
     ...agentSection,
@@ -199,20 +201,25 @@ export const OPENING_USER_PROMPT = [
 ].join("\n");
 
 export function buildDeterministicOpening(result: AnalysisResult, targetRole: string): string {
-  const { profile } = result;
-  const topSkills = profile.skills.slice(0, 3).map((s) => s.name).join(", ");
-  const topGap = result.gapAnalysis?.gaps[0]?.area ?? "role-specific skills";
-  const firstRec = result.actionPlan?.recommendations[0]?.title ?? "explore /growth for a plan";
+  const facts = buildProfileFacts(result, targetRole);
+  const topRepo = facts.topRepos[0]?.fullName;
+  const topGap = facts.gaps[0]?.area ?? "role-specific skills";
+  const pinHint =
+    facts.pinnedCount === 0
+      ? topRepo
+        ? `You have **no pinned repos** yet — pin **${facts.topRepos.slice(0, 3).map((r) => r.fullName).join("**, **")}** to surface your best work.`
+        : "Pin your strongest repositories on your profile."
+      : `Pinned: **${facts.pinnedRepoNames.join("**, **")}**.`;
 
   return [
-    `Hey @${profile.username}! I've analyzed your public GitHub profile.`,
+    `Hey @${facts.username}! I've analyzed your public GitHub profile.`,
     "",
-    `Your stack (${profile.primaryStack.slice(0, 4).join(", ")}) and skills like **${topSkills}** stand out.`,
-    `For **${targetRole}**, fit is **${result.gapAnalysis?.fitScore ?? "N/A"}/10** — biggest gap: **${topGap}**.`,
+    `**${facts.publicRepoCount}** public repos · **${facts.pinnedCount}** pinned · attractiveness **${facts.attractivenessScore ?? "N/A"}/10**.`,
+    `Stack: ${facts.primaryStack.slice(0, 4).join(", ") || "unknown"}. For **${targetRole}**, fit is **${facts.fitScore ?? "N/A"}/10** — biggest gap: **${topGap}**.`,
     "",
-    `Suggested next step: **${firstRec}**.`,
+    pinHint,
     "",
-    "Ask me anything about your profile, or try `/gaps`, `/growth`, `/export`.",
+    "Ask me anything, or try `/gaps`, `/growth`, `/improve`.",
   ].join("\n");
 }
 

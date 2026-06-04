@@ -2,8 +2,10 @@ import type {
   DeveloperProfile,
   GapAnalysis,
   GitHubProfileData,
+  GitHubRepoData,
   ProfileImprovement,
 } from "@git-mentor/core";
+import { rankTopRepos } from "./profile-facts.js";
 
 export function buildProfileImprovements(
   profile: DeveloperProfile,
@@ -24,7 +26,7 @@ export function buildProfileImprovements(
   }
 
   const reposMissingDescription = repos.filter((r) => !r.description?.trim()).length;
-  if (reposMissingDescription >= 2) {
+  if (reposMissingDescription >= 3) {
     items.push({
       category: "readme",
       priority: 4,
@@ -34,14 +36,22 @@ export function buildProfileImprovements(
     });
   }
 
-  const topRepos = [...repos].sort((a, b) => (b.stargazers_count ?? 0) - (a.stargazers_count ?? 0));
-  if (topRepos.length >= 2) {
+  const topForPin = rankTopRepos(repos as GitHubRepoData[], profile.username, 3);
+  if (topForPin.length >= 2 && (githubData?.pinnedRepos?.length ?? 0) === 0) {
+    items.push({
+      category: "pinned",
+      priority: 5,
+      title: "Pin your strongest repositories",
+      description: "Pinned repos are the portfolio above the fold on your GitHub profile.",
+      action: `Pin **${topForPin.map((r) => r.fullName).join("**, **")}** — or run \`/apply pin ${topForPin.map((r) => r.fullName).join(" ")}\`.`,
+    });
+  } else if (topForPin.length >= 2) {
     items.push({
       category: "pinned",
       priority: 4,
       title: "Pin your strongest repositories",
       description: "Pinned repos are the portfolio above the fold on your GitHub profile.",
-      action: `Pin **${topRepos.slice(0, 3).map((r) => r.name).join("**, **")}** — your highest-signal public work.`,
+      action: `Pin **${topForPin.map((r) => r.name).join("**, **")}** — your highest-signal public work.`,
     });
   }
 
